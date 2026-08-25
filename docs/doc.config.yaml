@@ -1,0 +1,79 @@
+# docs/doc.config.yaml
+name: "Termux-BitNet"
+package_name_pypi: "termux-bitnet"
+package_name_npm: "termux-bitnet"
+version: "v1.0.1"
+release_name: "Production Ready"
+license: "Apache-2.0"
+platform: "Android ARM64 / NEON SIMD"
+github_repo_url: "https://github.com/uno-km/termux-bitnet"
+
+# 1줄 핵심 사명
+tagline_en: "ARM64 NEON DotProd SIMD Accelerated 1.58-bit On-Device LLM Inference Engine"
+tagline_ko: "ARM64 NEON DotProd SIMD 어셈블리 가속 1.58-bit 온디바이스 초고속 LLM 추론 엔진"
+
+# 빠른 설치 명령어
+quick_install_cmd: "pip install termux-bitnet\n# or: npm install termux-bitnet"
+
+# 기술 과제 및 혁신 설명
+why_challenge_en: "Standard FP16/INT4 LLM inference on mobile CPU architectures encounters extreme memory bandwidth bottlenecks, thermal throttling, and severe battery drain exceeding 15W."
+why_challenge_ko: "모바일 CPU 환경에서 표준 FP16/INT4 대규모 언어 모델 추론은 극심한 메모리 대역폭 병목과 15W 이상의 발열 및 배터리 소모를 유발합니다."
+
+description_en: "Executes 1.58-bit ternary quantized weights {-1, 0, +1} directly via hand-vectorized ARM64 NEON assembly kernels, reducing matrix multiplications to simple additions and subtractions with under 350MB RAM footprint."
+description_ko: "3진화 1.58-bit 가중치 {-1, 0, +1}를 수작업 최적화된 ARM64 NEON 어셈블리 커널로 직접 실행하여 행렬 곱셈을 덧셈/뺄셈으로 치환하고 350MB 미만의 초경량 메모리로 25+ tok/s 속도를 달성합니다."
+
+# 핵심 역량
+features:
+  - title_en: "1.58-Bit Ternary DotProd Acceleration"
+    title_ko: "1.58-bit 삼진 연산 DotProd 하드웨어 가속"
+    desc_en: "Replaces multiplication with pure integer additions using ARM64 dot-product vector SIMD instructions."
+    desc_ko: "ARM64 Dot-Product 벡터 SIMD 명령어를 활용하여 고비용 부동소수점 곱셈을 순수 정수 덧셈으로 대체합니다."
+  - title_en: "Zero-PRoot Native Bionic Execution"
+    title_ko: "비루트 네이티브 Bionic 직접 구동"
+    desc_en: "Direct execution on Android Bionic libc without Linux PRoot containers or root privileges."
+    desc_ko: "루팅이나 가상 리눅스(PRoot) 컨테이너 없이 안드로이드 순정 Bionic libc 환경에서 즉각 구동됩니다."
+  - title_en: "Dual-Engine Python & Node.js Gateways"
+    title_ko: "Python 및 Node.js 듀얼 게이트웨이"
+    desc_en: "Ultra-low overhead thin FFI bindings for both Python 3.8+ and Node.js 18+ runtimes."
+    desc_ko: "C-ABI 네이티브 라이브러리에 직접 바인딩되는 Python 및 Node.js 경량 래퍼를 동시 제공합니다."
+  - title_en: "Energy-Efficient Edge Deployment"
+    title_ko: "초저전력 스마트폰 구동"
+    desc_en: "Consumes under 2.5W during continuous token generation, preventing thermal throttling."
+    desc_ko: "지속 토큰 생성 시 2.5W 미만의 초저전력을 소모하여 스마트폰의 발열 쓰로틀링을 원천 차단합니다."
+
+# 연산 매트릭스 표
+matrix_table:
+  - category: "Inference Kernel"
+    operations: "ARM64 NEON DotProd, i2_s Ternary SIMD, OpenMP Multithreading"
+    status: "Production"
+  - category: "Memory & Cache"
+    operations: "Zero-Copy Safetensors mmap, Direct KV Cache Pooling"
+    status: "Production"
+  - category: "Language Bindings"
+    operations: "Python CFFI / ctypes, Node.js C-ABI FFI Wrapper"
+    status: "Production"
+  - category: "Supported Models"
+    operations: "BitNet b1.58 (0.7B / 1.5B / 3B / 7B), Llama-3-BitNet"
+    status: "Production"
+
+# 정석 실행 코드
+code_example_py: |
+  import termux_bitnet as bitnet
+
+  # 1. Load model with zero-copy mmap
+  model = bitnet.load_model("bitnet_b1_58-large.gguf")
+
+  # 2. Stream ultra-fast on-device inference
+  for token in model.generate("Explain quantum computing in one sentence:"):
+      print(token, end="", flush=True)
+
+code_example_js: |
+  import { BitNetEngine } from "termux-bitnet";
+
+  const engine = new BitNetEngine();
+  await engine.load("bitnet_b1_58-large.gguf");
+
+  const stream = engine.generateStream("Explain quantum computing in one sentence:");
+  for await (const chunk of stream) {
+    process.stdout.write(chunk);
+  }

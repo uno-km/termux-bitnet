@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel", "cmake>=3.20.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "termux-bitnet"
+version = "1.0.1"
+description = "High-performance 1.58-bit BitNet inference engine, Python SDK & CLI optimized for Android Termux and ARM64 architecture."
+readme = "README.md"
+authors = [
+    { name = "uno-km", email = "unokim.dev@gmail.com" }
+]
+license = { text = "Apache-2.0" }
+keywords = ["bitnet", "1-bit-llm", "termux", "arm64", "neon", "dotprod", "edge-ai", "on-device-ai"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: C++",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Android",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "tqdm>=4.64.0",
+    "requests>=2.28.0",
+]
+
+[project.optional-dependencies]
+server = [
+    "uvicorn>=0.20.0",
+    "fastapi>=0.95.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-benchmark>=4.0.0",
+]
+
+[project.scripts]
+termux-bitnet = "termux_bitnet.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/uno-km/termux-bitnet"
+Documentation = "https://uno-km.github.io/termux-bitnet/"
+Repository = "https://github.com/uno-km/termux-bitnet.git"
+Issues = "https://github.com/uno-km/termux-bitnet/issues"

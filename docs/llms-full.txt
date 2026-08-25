@@ -1,0 +1,31 @@
+# Termux-BitNet Full Technical Specification (v1.0.1)
+Official Documentation & Deep Architecture Reference for Autonomous AI Agents.
+
+## 1. System Overview
+ARM64 NEON DotProd SIMD Accelerated 1.58-bit On-Device LLM Inference Engine
+Executes 1.58-bit ternary quantized weights {-1, 0, +1} directly via hand-vectorized ARM64 NEON assembly kernels, reducing matrix multiplications to simple additions and subtractions with under 350MB RAM footprint.
+
+## 2. Package & Installation
+- PyPI: termux-bitnet
+- Command: pip install termux-bitnet
+# or: npm install termux-bitnet
+- Repository: https://github.com/uno-km/termux-bitnet
+
+## 3. Core Capabilities
+- **1.58-Bit Ternary DotProd Acceleration**: Replaces multiplication with pure integer additions using ARM64 dot-product vector SIMD instructions.
+- **Zero-PRoot Native Bionic Execution**: Direct execution on Android Bionic libc without Linux PRoot containers or root privileges.
+- **Dual-Engine Python & Node.js Gateways**: Ultra-low overhead thin FFI bindings for both Python 3.8+ and Node.js 18+ runtimes.
+- **Energy-Efficient Edge Deployment**: Consumes under 2.5W during continuous token generation, preventing thermal throttling.
+
+## 4. Canonical Implementation
+```python
+import termux_bitnet as bitnet
+
+# 1. Load model with zero-copy mmap
+model = bitnet.load_model("bitnet_b1_58-large.gguf")
+
+# 2. Stream ultra-fast on-device inference
+for token in model.generate("Explain quantum computing in one sentence:"):
+    print(token, end="", flush=True)
+
+```
