@@ -1,6 +1,6 @@
 {
   "name": "termux-bitnet",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Ultra-lightweight Node.js / JavaScript Thin Gateway for Native C++ 1.58-bit BitNet Inference on Android Termux & ARM64",
   "main": "index.js",
   "types": "index.d.ts",

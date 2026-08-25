@@ -49,3 +49,7 @@ export declare class BitNetEngine {
 
 export declare function createEngine(options?: BitNetOptions): BitNetEngine;
 export declare function detectHardware(): HardwareInfo;
+export declare function downloadModel(modelName?: string, outputDir?: string | null, force?: boolean): Promise<string>;
+export declare function listModels(): void;
+export declare const AVAILABLE_MODELS: Record<string, { repo: string; file: string; url: string; sizeMb: number; description: string }>;
+

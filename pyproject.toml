@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "termux-bitnet"
-version = "1.0.1"
+version = "1.0.2"
 description = "High-performance 1.58-bit BitNet inference engine, Python SDK & CLI optimized for Android Termux and ARM64 architecture."
 readme = "README.md"
 authors = [
