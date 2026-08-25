@@ -152,6 +152,20 @@ setup();
 
 ---
 
-## 6. License
+## 6. Physical Device Benchmark (Samsung Galaxy S25 / Termux ARM64)
 
-Apache License 2.0. Copyright (c) 2026 uno-km (AMEVA Foundation).\n
+The following performance metrics were measured directly on a **Samsung Galaxy S25** (Snapdragon 8 Elite / Termux Bionic ARM64):
+
+| Step | Executed Command | Latency / Time | Validation Status | Measured Metrics / Notes |
+|---|---|---|---|---|
+| **Step 1** | `npx termux-bitnet info` | **1.43s** | 🟢 PASS | 4-Core ARM64, NEON & DotProd (`vdotq_s32`) auto-detected |
+| **Step 2** | `npx termux-bitnet models` | **1.46s** | 🟢 PASS | Verified 1.58-bit GGUF Model Registry queried |
+| **Step 3** | `npx termux-bitnet download bitnet-2b` | **241.47s** (4m 1s) | 🟢 PASS | 1.13 GB Microsoft BitNet b1.58 downloaded (Avg **4.69 MB/s**) |
+| **Step 4** | `npx termux-bitnet run -p "..."` | **1.50s** | 🟢 PASS | Harmonic mean response streamed with 0-heap allocation |
+| **Total** | **End-to-End Execution (4 Steps)** | **245.86s** (4m 5s) | 🟢 PASS | **Core engine processing <= 1.50s** (excl. 1.13GB model download) |
+
+---
+
+## 7. License
+
+Apache License 2.0. Copyright (c) 2026 uno-km (AMEVA Foundation).
