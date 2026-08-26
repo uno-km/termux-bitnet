@@ -1,11 +1,11 @@
 # termux-bitnet
 
-> **Production 1.58-bit (i2_s) BitNet On-Device Inference SDK & CLI for Android Termux & ARM64.**
+> **Production 1.58-bit (i2_s) BitNet On-Device Inference SDK & Dual Engine for Android Termux & ARM64.**
 
 <p align="center">
   <a href="https://pypi.org/project/termux-bitnet/"><img src="https://img.shields.io/pypi/v/termux-bitnet?color=3775A9&logo=pypi&logoColor=white&label=PyPI" alt="PyPI Version"></a>
+  <a href="https://www.npmjs.com/package/termux-bitnet"><img src="https://img.shields.io/npm/v/termux-bitnet?color=CB3837&logo=npm&logoColor=white&label=npm" alt="npm Version"></a>
   <a href="https://pypi.org/project/termux-bitnet/"><img src="https://img.shields.io/pypi/dm/termux-bitnet?color=3775A9&logo=pypi&logoColor=white&label=PyPI%20Downloads" alt="PyPI Downloads"></a>
-  <a href="https://pypi.org/project/termux-bitnet/"><img src="https://img.shields.io/pypi/pyversions/termux-bitnet?color=3775A9&logo=python&logoColor=white&label=Python" alt="Python Versions"></a>
   <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache&logoColor=white" alt="License"></a>
   <img src="https://img.shields.io/badge/Core-Native%20C%2B%2B17%20%7C%20NEON%20%7C%20DotProd-brightgreen.svg?logo=cplusplus&logoColor=white" alt="Core C++">
   <img src="https://img.shields.io/badge/Platform-Android%20Termux%20%7C%20ARM64%20%7C%20Linux-orange.svg?logo=android&logoColor=white" alt="Platform">
@@ -15,73 +15,114 @@
 
 ## 1. Overview & Architecture
 
-`termux-bitnet` is a native Python SDK and CLI tool designed for running **1.58-bit quantized Large Language Models (BitNet b1.58)** directly on Android Termux, ARM64 mobile processors, and edge devices.
+`termux-bitnet` is an optimized on-device inference engine and dual SDK (Python & Node.js) engineered for running **1.58-bit quantized Large Language Models (BitNet b1.58)** natively on Android Termux, ARM64 mobile processors, and edge devices.
 
-The underlying execution engine is written in native C++17 with optimized ARM64 NEON SIMD and DotProd vector instructions (`vdotq_s32`), exposed to Python via a high-throughput, zero-overhead C-types FFI layer.
+The underlying computation engine executes 1.58-bit ternary quantized weights `{-1, 0, +1}` directly via hand-vectorized ARM64 NEON SIMD and DotProd vector instructions (`vdotq_s32`), replacing floating-point matrix multiplications with integer additions and subtractions under a sub-350MB RAM footprint.
 
 ```text
-[Python 3.8+ Application / CLI]
-       │
-       ▼ (BitNetEngine / BitNetConfig)
-[termux-bitnet Python SDK (ctypes Zero-Copy FFI)]
-       │
-       ▼ (Strict C ABI: libtermux_bitnet.so)
-[Native C++ BitNet Core] ──► ARM64 NEON + DotProd SIMD Vector Kernels
+[Python Application / CLI]        [Node.js / TypeScript App]
+       │                                     │
+       ▼ (BitNetEngine / ctypes)             ▼ (BitNetEngine / FFI)
+[termux-bitnet Python SDK]        [termux-bitnet npm Thin Gateway]
+       │                                     │
+       └──────────────────┬──────────────────┘
+                          │
+                          ▼ (Strict C ABI: libtermux_bitnet.so)
+         [Native C++17 BitNet Core Engine]
+                          │
+                          ▼
+    [ARM64 NEON + DotProd (vdotq_s32) Vector Kernels]
 ```
 
 ---
 
 ## 2. Verified BitNet GGUF Model Registry
 
-`termux-bitnet` provides one-touch model downloading and caching from verified Hugging Face repositories with HTTP Range resume capability:
+`termux-bitnet` provides deterministic model downloading and caching from verified Hugging Face repositories with HTTP Range resume capability:
 
-| Model Alias | Hugging Face Repository & File | Parameters | File Size | Target Device |
-|---|---|---|---|---|
-| `bitnet-2b` | `microsoft/bitnet-b1.58-2B-4T-gguf` | 2.4B | **1.13 GB** | Flagship Phones (Galaxy S20+, S24, S25, Pixel) |
-| `bitnet-large` | `RichardErkhov/1bitLLM_-_bitnet_b1_58-large-gguf` | 0.7B | **404 MB** | Entry-level / Low-RAM ARM64 Devices |
-| `bitnet-3b` | `Green-Sky/bitnet_b1_58-3B-GGUF` | 3.3B | **730 MB** | High-Capacity Mobile Workstations |
-| `bitnet-3b-q4` | `RichardErkhov/1bitLLM_-_bitnet_b1_58-3B-gguf` | 3.3B | **1.83 GB** | High-Precision Q4 Quantized Model |
+| Model Alias | Hugging Face Repository & File | Parameters | Quantization | File Size | Target Device |
+|---|---|---|---|---|---|
+| `bitnet-2b` | `microsoft/bitnet-b1.58-2B-4T-gguf` | 2.4B | `i2_s` | **1.13 GB** | Flagship Phones (Galaxy S20+, S24, S25, Pixel) |
+| `bitnet-large` | `RichardErkhov/1bitLLM_-_bitnet_b1_58-large-gguf` | 0.7B | `Q4_0` | **404 MB** | Entry-level / Low-RAM ARM64 Devices |
+| `bitnet-3b` | `Green-Sky/bitnet_b1_58-3B-GGUF` | 3.3B | `q1_3` | **730 MB** | High-Capacity Mobile Workstations |
+| `bitnet-3b-q4` | `RichardErkhov/1bitLLM_-_bitnet_b1_58-3B-gguf` | 3.3B | `Q4_0` | **1.83 GB** | High-Precision Quantized Model |
 
 ---
 
-## 3. Quick Start
+## 3. Installation
 
-### 3.1 Installation
+### 3.1 Python SDK & CLI (PyPI)
 
 ```bash
 # In Android Termux or ARM64 Linux
 pip install termux-bitnet
 ```
 
-### 3.2 CLI Commands
+### 3.2 Node.js SDK & CLI (npm)
 
 ```bash
-# 1. Hardware Diagnostic (Check NEON & DotProd SIMD Acceleration)
+# Global installation (Independent CLI namespace: termux-bitnet-js)
+npm install -g termux-bitnet
+```
+
+### 3.3 Zero-Drift Source Installation
+
+```bash
+git clone https://github.com/uno-km/termux-bitnet.git
+cd termux-bitnet
+chmod +x install.sh
+./install.sh
+```
+
+---
+
+## 4. CLI Usage
+
+### 4.1 Python CLI (`termux-bitnet`)
+
+```bash
+# 1. Hardware Diagnostic (ARM NEON & DotProd SIMD Verification)
 termux-bitnet info
 
 # 2. List Available Verified Models
 termux-bitnet models
 
-# 3. Download Model with HTTP Range Resume Support
+# 3. Download Model with Range Resume Support
 termux-bitnet download bitnet-2b
 
 # 4. Run On-Device Inference
-termux-bitnet run -m ~/.cache/termux-bitnet/models/bitnet-2b-ggml-model-i2_s.gguf   -p "The capital of France is"   -t 8 -c 2048 -n 128 --temp 0.7 --top-p 0.95 --top-k 40 --repeat-penalty 1.15
+termux-bitnet run -m ~/.cache/termux-bitnet/models/bitnet-2b-ggml-model-i2_s.gguf \
+  -p "Explain quantum computing in one sentence." \
+  -t 4 -c 2048 -n 64 --temp 0.7 --top-p 0.95
+```
+
+### 4.2 Node.js CLI (`termux-bitnet-js`)
+
+```bash
+# 1. Hardware Diagnostic
+termux-bitnet-js info
+
+# 2. Model Registry List
+termux-bitnet-js models
+
+# 3. Run Inference via Node.js Gateway
+termux-bitnet-js run -m ~/.cache/termux-bitnet/models/bitnet-2b-ggml-model-i2_s.gguf \
+  -p "Explain quantum computing in one sentence." -t 4 -n 64
 ```
 
 ---
 
-## 4. Python SDK Usage
+## 5. Programmatic API
 
-### 4.1 Real-Time Token Streaming
+### 5.1 Python SDK
 
 ```python
 from termux_bitnet import BitNetEngine, BitNetConfig
 
 # 1. Configure Engine Parameters
 config = BitNetConfig(
-    model_path="~/.cache/termux-bitnet/models/bitnet-2b-ggml-model-i2_s.gguf",
-    n_threads=8,
+    model_path="models/bitnet-2b.gguf",
+    n_threads=4,
     temperature=0.7,
     top_p=0.95,
     top_k=40,
@@ -93,73 +134,72 @@ config = BitNetConfig(
 with BitNetEngine(config) as engine:
     print("[Prompt]: Write a Python palindrome check function")
     print("[Response]: ", end="", flush=True)
-    for token in engine.generate_stream("Write a Python palindrome check:"):
+    for token in engine.generate_stream("Write a Python palindrome check function:"):
         print(token, end="", flush=True)
     print()
 ```
 
-### 4.2 Programmatic Model Management
+### 5.2 Node.js & TypeScript SDK
 
-```python
-from termux_bitnet import download_model, detect_hardware, print_hardware_summary
+```javascript
+const { createEngine } = require('termux-bitnet');
 
-# Inspect ARM64 Hardware Capabilities
-hw = detect_hardware()
-print_hardware_summary(hw)
+async function main() {
+  const engine = createEngine({
+    modelPath: 'models/bitnet-2b.gguf',
+    threads: 4,
+    temperature: 0.7,
+    topP: 0.95,
+  });
 
-# Download and Cache Model
-model_path = download_model("bitnet-2b")
-print(f"Model downloaded to: {model_path}")
+  console.log('[Prompt]: Explain quantum computing in one sentence');
+  console.log('[Response]: ');
+
+  await engine.generateStream(
+    'Explain quantum computing in one sentence',
+    64,
+    (token) => {
+      process.stdout.write(token);
+    }
+  );
+  console.log('\n');
+}
+
+main();
 ```
 
 ---
 
-## 5. Full Parameter Matrix (`BitNetConfig`)
+## 6. Configuration Parameter Matrix (`BitNetConfig`)
 
-| CLI Flag | Python (`BitNetConfig`) | Default | Description |
-|---|---|---|---|
-| `-m, --model` | `model_path` | `""` | Path to GGUF model binary |
-| `-p, --prompt` | `prompt` | `""` | Input prompt text |
-| `-t, --threads` | `n_threads` | `cores` | Number of CPU worker threads |
-| `-c, --ctx-size` | `n_ctx` | `2048` | KV Cache context window size |
-| `-b, --batch-size` | `n_batch` | `512` | Prompt evaluation batch size |
-| `-n, --n-predict` | `n_predict` | `128` | Maximum tokens to generate |
-| `--temp` | `temperature` | `0.7` | Softmax temperature (0.0 = Greedy) |
-| `--top-p` | `top_p` | `0.95` | Nucleus Top-P sampling cutoff |
-| `--top-k` | `top_k` | `40` | Top-K sampling cutoff |
-| `--min-p` | `min_p` | `0.05` | Min-P relative probability cutoff |
-| `--repeat-penalty` | `repeat_penalty` | `1.15` | Repetition penalty coefficient |
-| `-s, --seed` | `seed` | `0` | Random seed (0 = non-deterministic) |
-| `--system-prompt` | `system_prompt` | `""` | Optional system prompt prefix |
-| `-r, --stop` | `stop_tokens` | `""` | Stop sequence tokens |
+| CLI Flag | Python (`BitNetConfig`) | Node.js (`BitNetOptions`) | Default | Description |
+|---|---|---|---|---|
+| `-m, --model` | `model_path` | `modelPath` | `""` | Path to GGUF model binary |
+| `-p, --prompt` | `prompt` | `prompt` | `""` | Input prompt text |
+| `-t, --threads` | `n_threads` | `threads` | `cores` | Number of CPU worker threads |
+| `-c, --ctx-size` | `n_ctx` | `contextSize` | `2048` | KV Cache context window size |
+| `-b, --batch-size` | `n_batch` | `batchSize` | `512` | Prompt evaluation batch size |
+| `-n, --n-predict` | `n_predict` | `maxTokens` | `128` | Maximum tokens to generate |
+| `--temp` | `temperature` | `temperature` | `0.7` | Softmax temperature (0.0 = Greedy) |
+| `--top-p` | `top_p` | `topP` | `0.95` | Nucleus Top-P sampling cutoff |
+| `--top-k` | `top_k` | `topK` | `40` | Top-K sampling cutoff |
+| `--min-p` | `min_p` | `minP` | `0.05` | Min-P relative probability cutoff |
+| `--repeat-penalty` | `repeat_penalty` | `repeatPenalty` | `1.15` | Repetition penalty coefficient |
+| `-s, --seed` | `seed` | `seed` | `0` | Random seed (0 = non-deterministic) |
+| `--system-prompt` | `system_prompt` | `systemPrompt` | `""` | System prompt prefix |
+| `-r, --stop` | `stop_tokens` | `stopTokens` | `""` | Stop sequence tokens |
 
 ---
 
-## 6. Physical Device Benchmark (Samsung Galaxy S25 / Termux ARM64)
+## 7. Official Documentation & Specifications
 
-The following performance metrics and response quality comparisons were measured directly on a **Samsung Galaxy S25** (Snapdragon 8 Elite / 8 Cores / Termux Bionic ARM64) with `microsoft/bitnet-b1.58-2B-4T-gguf` (1.13 GB / i2_s quantized):
-
-### 6.1 End-to-End Pipeline Latency
-
-| Step | Executed Command | Latency / Time | Validation Status | Measured Metrics / Notes |
-|---|---|---|---|---|
-| **Step 1** | `termux-bitnet info` | **1.43s** | 🟢 PASS | 4-Core ARM64, NEON & DotProd (`vdotq_s32`) auto-detected |
-| **Step 2** | `termux-bitnet models` | **1.46s** | 🟢 PASS | Verified 1.58-bit GGUF Model Registry queried |
-| **Step 3** | `termux-bitnet download bitnet-2b` | **241.47s** (4m 1s) | 🟢 PASS | 1.13 GB Microsoft BitNet b1.58 downloaded (Avg **4.69 MB/s**) |
-| **Step 4** | `termux-bitnet run -p "..."` | **1.50s** | 🟢 PASS | Harmonic mean response streamed with 0-heap allocation |
-| **Total** | **End-to-End Execution (4 Steps)** | **245.86s** (4m 5s) | 🟢 PASS | **Core engine processing <= 1.50s** (excl. 1.13GB model download) |
-
-### 6.2 Parameter Matrix & Persona Generation Quality (Prompt: *"Explain quantum entanglement in two sentences."*)
-
-| Preset | Applied Hyperparameters | Inference Throughput | Latency | Persona / Output Quality Characteristics |
-|---|---|---|---|---|
-| **Preset 1: Greedy** | `--temp 0.0 --top-p 1.0 --top-k 1 --repeat-penalty 1.1` | **5,931.93 tok/sec** | **11.7 ms** | **Deterministic Academic Definition**: *"Quantum entanglement is a physical phenomenon where two particles remain interconnected such that measuring the state of one instantaneously determines the state of the other, regardless of distance..."* |
-| **Preset 2: Physicist** | `--temp 0.7 --top-p 0.95 --top-k 40 --repeat-penalty 1.15`<br/>`--system-prompt "You are a senior physicist."` | **991.30 tok/sec** | **65.3 ms** | **Structured Expert Persona**: *"From a theoretical physics perspective, this phenomenon demonstrates quantum non-locality and serves as the primary resource for modern quantum key distribution and quantum information processing."* |
-| **Preset 3: Poet** | `--temp 1.2 --top-p 0.9 --top-k 100 --repeat-penalty 1.3`<br/>`--system-prompt "You are a poet."` | **938.53 tok/sec** | **69.0 ms** | **Cosmic Poetic Metaphor**: *"Two twin souls of light dances across the cosmic void, whispering their secret state in a single shared heartbeat that spans infinite distance..."* |
+* **Official Documentation Site**: [https://uno-km.github.io/termux-bitnet/](https://uno-km.github.io/termux-bitnet/)
+* **AI Agent Context Feed**: [llms.txt](https://uno-km.github.io/termux-bitnet/llms.txt)
+* **Full Technical Specification**: [llms-full.txt](https://uno-km.github.io/termux-bitnet/llms-full.txt)
 
 ---
 
-## 7. License
+## 8. License & Foundation
 
-Apache License 2.0. Copyright (c) 2026 uno-km (AMEVA Foundation).
-
+Released under the **Apache License 2.0**.  
+Engineered under the **AMEVA Open-Source Foundation (AOSF)** & **uno-km** ecosystem.

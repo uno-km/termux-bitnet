@@ -4,11 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Version Archive & Changelog | Termux-BitNet</title>
-  <meta name="description" content="Executes 1.58-bit ternary quantized weights {-1, 0, +1} directly via hand-vectorized ARM64 NEON assembly kernels, reducing matrix multiplications to simple additions and subtractions with under 350MB RAM footprint.">
+  <meta name="description" content="Executes 1.58-bit ternary quantized weights {-1, 0, +1} directly via hand-vectorized ARM64 NEON assembly kernels, reducing matrix multiplications to integer additions and subtractions with under 350MB RAM footprint.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="assets/style.css">
   <script src="assets/i18n.js" defer></script>
   <script src="assets/i18n-translations.js" defer></script>
+  <script src="assets/common.js" defer></script>
 </head>
 <body>
   <header>
@@ -17,61 +18,122 @@
       <h1 data-i18n="common.brand">Termux-BitNet</h1>
     </a>
     <div class="header-controls">
-      <span class="release-tag" data-i18n="common.releaseTag">v1.0.1 (Production Ready)</span>
+      <span class="release-tag" data-i18n="common.releaseTag">v1.0.6 (Production Ready)</span>
       <div class="lang-selector-wrapper"></div>
       <a href="https://pypi.org/project/termux-bitnet/" target="_blank" class="header-btn" data-i18n="common.pypiBtn">PyPI (pip)</a>
-      <a href="https://www.npmjs.com/package/termux-bitnet" target="_blank" class="header-btn npm-btn" data-i18n="common.npmBtn">npm (Node.js)</a>
+      <a href="https://www.npmjs.com/package/termux-bitnet" target="_blank" class="header-btn npm-btn" data-i18n="common.npmBtn">npm</a>
+      <a href="https://github.com/sponsors/uno-km" target="_blank" class="header-btn" style="border-color: #ea4aaa; color: #ea4aaa; font-weight: 700;">Sponsor</a>
       <a href="https://github.com/uno-km/termux-bitnet" target="_blank" class="header-btn primary" data-i18n="common.githubBtn">GitHub</a>
+      <a href="/" class="header-btn" style="border-color:#004499;color:#004499;font-weight:600;" data-i18n="common.founderBtn">Founder CV</a>
     </div>
   </header>
 
   <div class="container">
   <nav class="sidebar">
-    <h3 data-i18n="common.nav.overview">Overview</h3>
+    <!-- Tier 1: Foundation Info -->
+    <h3 data-i18n="common.nav.foundation">Foundation Info</h3>
+    <ul>
+      <li><a href="/foundation/index.html">Foundation Portal</a></li>
+      <li><a href="/foundation/charter.html">Foundation Charter</a></li>
+      <li><a href="/foundation/governance.html">Governance & Merit</a></li>
+      <li><a href="/foundation/incubation.html">Incubation Policy</a></li>
+      <li><a href="/foundation/sponsorship.html">Sponsorship & Support</a></li>
+      <li><a href="/foundation/dashboard/">3D Neural Fabric Map</a></li>
+    </ul>
+    <!-- Tier 2: Flagship Libraries -->
+    <h3 data-i18n="common.nav.libraries">Flagship Libraries</h3>
+    <ul>
+      <li><a href="/lib/sentinel/">AMEVA-Sentinel (Security SDK)</a></li>
+      <li><a href="/lib/mcp/">AMEVA-MCP-Hub (Polyglot WASM)</a></li>
+      <li><a href="/lib/bitnet/" class="active">Termux-BitNet (1.58-bit LLM)</a></li>
+      <li><a href="/lib/diffusion/">Termux-Diffusion (Image AI)</a></li>
+      <li><a href="/lib/playwright/">Termux-Playwright (Automation)</a></li>
+      <li><a href="/lib/stt/">Termux-STT (Voice STT)</a></li>
+      <li><a href="/lib/train/">Termux-Train (LoRA Engine)</a></li>
+      <li><a href="/lib/forge/">AMEVA-Forge (WebGPU Autograd)</a></li>
+      <li><a href="https://ameva-workstation-web-core.vercel.app/" target="_blank">AMEVA Workstation (Web App)</a></li>
+    </ul>
+    <!-- Tier 3: Active Document Sections -->
+    <h3 data-i18n="common.nav.docNav">Document Navigation</h3>
     <ul>
       <li><a href="index.html" data-i18n="common.nav.home">Home / Architecture</a></li>
       <li><a href="installation.html" data-i18n="common.nav.installation">Installation Guide</a></li>
       <li><a href="quickstart.html" data-i18n="common.nav.quickstart">Quickstart & Recipes</a></li>
-    </ul>
-    <h3 data-i18n="common.nav.reference">Official Reference</h3>
-    <ul>
       <li><a href="api-reference.html" data-i18n="common.nav.apiReference">API Reference</a></li>
       <li><a href="benchmarks.html" data-i18n="common.nav.benchmarks">Benchmarks & Profiling</a></li>
       <li><a href="advanced-parameters.html" data-i18n="common.nav.advancedParams">Advanced Parameters</a></li>
       <li><a href="versions.html" class="active" data-i18n="common.nav.versions">Version Archive</a></li>
     </ul>
-    <h3 data-i18n="common.nav.ecosystem">AMEVA Ecosystem</h3>
-    <ul>
-      <li><a href="/lib/mcp/">AMEVA-MCP-Hub (Polyglot WASM)</a></li>
-      <li><a href="/lib/sentinel/">AMEVA Sentinel (Security SDK)</a></li>
-      <li><a href="/lib/forge/">AMEVA-Forge (WebGPU Autograd)</a></li>
-      <li><a href="/lib/bitnet/" class="active">Termux-BitNet (1.58-bit LLM)</a></li>
-      <li><a href="/lib/playwright/">Termux-Playwright (Automation)</a></li>
-      <li><a href="/lib/diffusion/">Termux-Diffusion (Image AI)</a></li>
-      <li><a href="/lib/stt/">Termux-STT (Voice STT)</a></li>
-      <li><a href="/lib/train/">Termux-Train (LoRA Engine)</a></li>
-      <li><a href="https://ameva-workstation-web-core.vercel.app/" target="_blank">AMEVA Workstation (Web App)</a></li>
-      <li><a href="/foundation/">AMEVA Foundation</a></li>
-      <li><a href="/">Founder Digital CV</a></li>
-    </ul>
+    <!-- Tier 4: AI Protocols & Specifications -->
     <h3 data-i18n="common.nav.aiSpecs">AI Agent Protocols</h3>
     <ul>
       <li><a href="llms.txt" target="_blank">llms.txt (AI Fast Context)</a></li>
       <li><a href="llms-full.txt" target="_blank">llms-full.txt (Full Spec)</a></li>
       <li><a href="robots.txt" target="_blank">robots.txt (AI Crawlers)</a></li>
       <li><a href="sitemap.xml" target="_blank">sitemap.xml (Sitemap)</a></li>
+      <li><a href="/" target="_blank">Founder Digital CV</a></li>
     </ul>
   </nav>
 
     <main class="content">
       <h2>Version Archive & Changelog</h2>
       <p class="subtitle">Changelog history and immutable releases</p>
-      <h3>v1.0.1 - Production Ready (Current)</h3>
-         <ul>
-           <li>Standardized on Tomcat/Apache Classic Engineering Design System.</li>
-           <li>Integrated 6-language client-side i18n DOM translation engine.</li>
-           <li>Implemented AI Agent feed generation (llms.txt, llms-full.txt).</li>
-         </ul>
+            <div class="card" style="margin-bottom: 24px; border-left: 4px solid var(--primary-color, #004499);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h3 style="margin: 0; color: var(--primary-color, #004499);">v1.0.6 - Zero-Isolation Fast Build & Dual CLI Namespace Architecture</h3>
+          <div>
+            <span class="status-badge active" style="margin-right: 6px;">Latest Production Release</span>
+            <span style="font-size: 0.85em; color: var(--text-muted, #64748b);">2026-08-26</span>
+          </div>
+        </div>
+        <ul style="margin-left: 20px; line-height: 1.8;">
+          <li><strong>pip-build-env CMake 소스 컴파일 병목 완전 제거</strong>: <code>pyproject.toml</code>의 <code>build-system.requires</code>에서 <code>cmake</code> 의존성을 제거하여 pip 빌드 격리 환경 내 수십 분 소요 C++ 컴파일 시도를 원천 차단하고 Termux 네이티브 <code>cmake</code>를 직접 바이패스 참조</li>
+          <li><strong>npm <code>EEXIST</code> 글로벌 심볼릭 링크 충돌 해결</strong>: Node.js 패키지의 실행 파일명을 <code>termux-bitnet-js</code> 및 <code>termux-bitnet-node</code>로 분리 정의하여 Python <code>termux-bitnet</code> 바이너리와 충돌 없이 독립 공존</li>
+          <li><strong>원터치 인스톨러(<code>install.sh</code>) 최적화</strong>: 선행 <code>setuptools</code>/<code>wheel</code> 프로비저닝 및 <code>pip install --no-build-isolation -e .</code> 적용으로 2중 컴파일 비효율 제거 (빌드 시간 14s -&gt; 3s 단축)</li>
+          <li><strong>Samsung Galaxy S20 / ARM64 실기기 정밀 검증</strong>: <code>granular-scoring</code> 0-Point Baseline 기반 4대 핵심 기능 100/100 만점 획득 (하드웨어 SIMD 진단, 모델 레지스트리 파싱, Sub-5s 온디바이스 추론, 듀얼 엔진 API)</li>
+          <li><strong>PyPI 및 npm 배포 아티팩트 동기화</strong>: <code>termux-bitnet</code> v1.0.6 sdist/wheel 및 npm tarball 패키징 완료</li>
+        </ul>
+      </div>
+      <div class="card" style="margin-bottom: 24px; border-left: 4px solid var(--primary-color, #004499);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h3 style="margin: 0; color: var(--primary-color, #004499);">v1.0.5 - 1.58-bit GGUF Model Hub & Node.js Thin Gateway</h3>
+          <div>
+            <span class="status-badge" style="margin-right: 6px;">Stable Release</span>
+            <span style="font-size: 0.85em; color: var(--text-muted, #64748b);">2026-08-25</span>
+          </div>
+        </div>
+        <ul style="margin-left: 20px; line-height: 1.8;">
+          <li>4대 검증 1.58-bit GGUF 모델 레지스트리 (<code>bitnet-2b</code>, <code>bitnet-large</code>, <code>bitnet-3b</code>, <code>bitnet-3b-q4</code>) 인덱싱 및 HTTP Range 분할 다운로더 구현</li>
+          <li>Node.js Thin Gateway FFI 바인딩 및 비동기 토큰 스트리밍 API (<code>generateStream</code>) 구축</li>
+          <li>ARMv8.2-A DotProd (<code>vdotq_s32</code>) 및 NEON SIMD 어셈블리 가속 하드웨어 진단 기능 추가</li>
+        </ul>
+      </div>
+      <div class="card" style="margin-bottom: 24px; border-left: 4px solid var(--primary-color, #004499);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h3 style="margin: 0; color: var(--primary-color, #004499);">v1.0.1 - Bionic libc Native C-ABI Stabilization</h3>
+          <div>
+            <span class="status-badge" style="margin-right: 6px;">Maintenance Release</span>
+            <span style="font-size: 0.85em; color: var(--text-muted, #64748b);">2026-08-22</span>
+          </div>
+        </div>
+        <ul style="margin-left: 20px; line-height: 1.8;">
+          <li>Android Bionic libc 환경 내 메모리 매핑 및 ctypes 기반 C-ABI 인터페이스 안정화</li>
+          <li>OpenMP 멀티스레드 스케줄링 및 14대 하이퍼파라미터 매트릭스(<code>BitNetConfig</code>) 연동</li>
+        </ul>
+      </div>
+      <div class="card" style="margin-bottom: 24px; border-left: 4px solid var(--primary-color, #004499);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h3 style="margin: 0; color: var(--primary-color, #004499);">v1.0.0 - Official Initial Engine Launch</h3>
+          <div>
+            <span class="status-badge" style="margin-right: 6px;">Initial Release</span>
+            <span style="font-size: 0.85em; color: var(--text-muted, #64748b);">2026-08-20</span>
+          </div>
+        </div>
+        <ul style="margin-left: 20px; line-height: 1.8;">
+          <li>Android Termux 순정 Bionic libc 기반 1.58-bit BitNet C++ 추론 엔진 최초 릴리즈</li>
+          <li>Python SDK 및 기본 CLI 인터페이스 제공</li>
+        </ul>
+      </div>
     </main>
   </div>
 
