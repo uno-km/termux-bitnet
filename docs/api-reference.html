@@ -18,10 +18,10 @@
       <h1 data-i18n="common.brand">Termux-BitNet</h1>
     </a>
     <div class="header-controls">
-      <span class="release-tag" data-i18n="common.releaseTag">v1.0.6 (Production Ready)</span>
+      <span class="release-tag" data-i18n="common.releaseTag">v1.0.6</span>
       <div class="lang-selector-wrapper"></div>
-      <a href="https://pypi.org/project/termux-bitnet/" target="_blank" class="header-btn" data-i18n="common.pypiBtn">PyPI (pip)</a>
-      <a href="https://www.npmjs.com/package/termux-bitnet" target="_blank" class="header-btn npm-btn" data-i18n="common.npmBtn">npm</a>
+      <a href="/foundation/index.html" class="header-btn" style="border-color:#2563eb;color:#2563eb;font-weight:600;" data-i18n="common.foundationBtn">Foundation</a>
+      <a href="https://pypi.org/project/termux-bitnet/" target="_blank" class="header-btn" title="PyPI: termux-bitnet | npm: termux-bitnet" data-i18n="common.pkgBtn">pip / npm</a>
       <a href="https://github.com/sponsors/uno-km" target="_blank" class="header-btn" style="border-color: #ea4aaa; color: #ea4aaa; font-weight: 700;">Sponsor</a>
       <a href="https://github.com/uno-km/termux-bitnet" target="_blank" class="header-btn primary" data-i18n="common.githubBtn">GitHub</a>
       <a href="/" class="header-btn" style="border-color:#004499;color:#004499;font-weight:600;" data-i18n="common.founderBtn">Founder CV</a>
@@ -30,21 +30,23 @@
 
   <div class="container">
   <nav class="sidebar">
-    <!-- Tier 1: Foundation Info -->
-    <h3 data-i18n="common.nav.foundation">Foundation Info</h3>
+    <!-- Tier 1: Primary Document / Foundation Navigation -->
+    <h3 data-i18n="common.nav.docNav">Document Navigation</h3>
     <ul>
-      <li><a href="/foundation/index.html">Foundation Portal</a></li>
-      <li><a href="/foundation/charter.html">Foundation Charter</a></li>
-      <li><a href="/foundation/governance.html">Governance & Merit</a></li>
-      <li><a href="/foundation/incubation.html">Incubation Policy</a></li>
-      <li><a href="/foundation/sponsorship.html">Sponsorship & Support</a></li>
-      <li><a href="/foundation/dashboard/">3D Neural Fabric Map</a></li>
+      <li><a href="index.html">Home / Architecture</a></li>
+      <li><a href="installation.html">Installation Guide</a></li>
+      <li><a href="quickstart.html">Quickstart & Recipes</a></li>
+      <li><a href="api-reference.html" class="active">API Reference</a></li>
+      <li><a href="benchmarks.html">Benchmarks & Profiling</a></li>
+      <li><a href="advanced-parameters.html">Advanced Parameters</a></li>
+      <li><a href="versions.html">Version Archive</a></li>
     </ul>
     <!-- Tier 2: Flagship Libraries -->
     <h3 data-i18n="common.nav.libraries">Flagship Libraries</h3>
     <ul>
       <li><a href="/lib/sentinel/">AMEVA-Sentinel (Security SDK)</a></li>
       <li><a href="/lib/mcp/">AMEVA-MCP-Hub (Polyglot WASM)</a></li>
+      <li><a href="/lib/aichain/">Termux-AIChain (Zero-Dep Agent)</a></li>
       <li><a href="/lib/bitnet/" class="active">Termux-BitNet (1.58-bit LLM)</a></li>
       <li><a href="/lib/diffusion/">Termux-Diffusion (Image AI)</a></li>
       <li><a href="/lib/playwright/">Termux-Playwright (Automation)</a></li>
@@ -53,39 +55,69 @@
       <li><a href="/lib/forge/">AMEVA-Forge (WebGPU Autograd)</a></li>
       <li><a href="https://ameva-workstation-web-core.vercel.app/" target="_blank">AMEVA Workstation (Web App)</a></li>
     </ul>
-    <!-- Tier 3: Active Document Sections -->
-    <h3 data-i18n="common.nav.docNav">Document Navigation</h3>
-    <ul>
-      <li><a href="index.html" data-i18n="common.nav.home">Home / Architecture</a></li>
-      <li><a href="installation.html" data-i18n="common.nav.installation">Installation Guide</a></li>
-      <li><a href="quickstart.html" data-i18n="common.nav.quickstart">Quickstart & Recipes</a></li>
-      <li><a href="api-reference.html" class="active" data-i18n="common.nav.apiReference">API Reference</a></li>
-      <li><a href="benchmarks.html" data-i18n="common.nav.benchmarks">Benchmarks & Profiling</a></li>
-      <li><a href="advanced-parameters.html" data-i18n="common.nav.advancedParams">Advanced Parameters</a></li>
-      <li><a href="versions.html" data-i18n="common.nav.versions">Version Archive</a></li>
-    </ul>
-    <!-- Tier 4: AI Protocols & Specifications -->
+    <!-- Tier 3: AI Protocols & Specifications -->
     <h3 data-i18n="common.nav.aiSpecs">AI Agent Protocols</h3>
     <ul>
       <li><a href="llms.txt" target="_blank">llms.txt (AI Fast Context)</a></li>
       <li><a href="llms-full.txt" target="_blank">llms-full.txt (Full Spec)</a></li>
       <li><a href="robots.txt" target="_blank">robots.txt (AI Crawlers)</a></li>
       <li><a href="sitemap.xml" target="_blank">sitemap.xml (Sitemap)</a></li>
-      <li><a href="/" target="_blank">Founder Digital CV</a></li>
     </ul>
   </nav>
 
     <main class="content">
       <h2>Complete API Reference</h2>
       <p class="subtitle">100% Full Class, Struct, and Method Documentation</p>
-      <h3>Engine Subsystem</h3>
-         <table class="data-table">
-           <thead><tr><th>Method / Struct</th><th>Signature</th><th>Description</th></tr></thead>
-           <tbody>
-             <tr><td><code>Engine.__init__</code></td><td><code>(device='auto', precision='fp16')</code></td><td>Initializes hardware backend accelerator</td></tr>
-             <tr><td><code>Engine.compute</code></td><td><code>(inputs: Tensor) -&gt; Tensor</code></td><td>Executes closed-form calculation with memory protection</td></tr>
-           </tbody>
-         </table>
+      <h3>1. Python Engine API (<code>termux_bitnet.BitNetEngine</code>)</h3>
+<table class="data-table">
+  <thead>
+    <tr><th>Method / Property</th><th>Signature</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>BitNetEngine.__init__</code></td><td><code>(config: Optional[BitNetConfig] = None)</code></td><td>Instantiates native C++ context and loads C ABI dynamic library.</td></tr>
+    <tr><td><code>generate_stream</code></td><td><code>(prompt: str, max_tokens: int = 128) -&gt; Generator[str, None, None]</code></td><td>Yields generated token strings sequentially in real time.</td></tr>
+    <tr><td><code>generate</code></td><td><code>(prompt: str, max_tokens: int = 128) -&gt; str</code></td><td>Executes completion and returns concatenated output text.</td></tr>
+    <tr><td><code>get_hardware_info</code></td><td><code>() -&gt; str</code></td><td>Returns active CPU architecture, core count, and SIMD instruction flags.</td></tr>
+    <tr><td><code>get_last_metrics</code></td><td><code>() -&gt; GenerationMetrics</code></td><td>Returns prompt eval time, eval time, and tokens per second.</td></tr>
+    <tr><td><code>close</code></td><td><code>() -&gt; None</code></td><td>Releases native C context pointer and frees allocated memory.</td></tr>
+  </tbody>
+</table>
+
+<h3>2. Python Configuration Matrix (<code>termux_bitnet.BitNetConfig</code>)</h3>
+<table class="data-table">
+  <thead>
+    <tr><th>Attribute</th><th>Type</th><th>Default</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>model_path</code></td><td><code>str</code></td><td><code>""</code></td><td>Filesystem path to GGUF model binary.</td></tr>
+    <tr><td><code>n_threads</code></td><td><code>int</code></td><td><code>cores</code></td><td>Worker threads allocated for SIMD matrix calculation.</td></tr>
+    <tr><td><code>n_ctx</code></td><td><code>int</code></td><td><code>2048</code></td><td>KV Cache context window size in tokens.</td></tr>
+    <tr><td><code>n_batch</code></td><td><code>int</code></td><td><code>512</code></td><td>Batch size for prompt evaluation tokens.</td></tr>
+    <tr><td><code>n_predict</code></td><td><code>int</code></td><td><code>128</code></td><td>Maximum number of tokens to predict.</td></tr>
+    <tr><td><code>temperature</code></td><td><code>float</code></td><td><code>0.7</code></td><td>Sampling softmax temperature (0.0 = greedy).</td></tr>
+    <tr><td><code>top_p</code></td><td><code>float</code></td><td><code>0.95</code></td><td>Nucleus Top-P cumulative probability cutoff.</td></tr>
+    <tr><td><code>top_k</code></td><td><code>int</code></td><td><code>40</code></td><td>Top-K candidate token selection threshold.</td></tr>
+    <tr><td><code>min_p</code></td><td><code>float</code></td><td><code>0.05</code></td><td>Min-P relative probability cutoff.</td></tr>
+    <tr><td><code>repeat_penalty</code></td><td><code>float</code></td><td><code>1.15</code></td><td>Penalty applied to repeated token IDs.</td></tr>
+    <tr><td><code>seed</code></td><td><code>int</code></td><td><code>0</code></td><td>Random seed for sampling (0 = non-deterministic).</td></tr>
+    <tr><td><code>system_prompt</code></td><td><code>str</code></td><td><code>""</code></td><td>System prompt prefixed to conversation context.</td></tr>
+    <tr><td><code>stop_tokens</code></td><td><code>str</code></td><td><code>""</code></td><td>Comma-separated stop tokens for early generation termination.</td></tr>
+  </tbody>
+</table>
+
+<h3>3. Node.js Gateway API (<code>termux-bitnet</code>)</h3>
+<table class="data-table">
+  <thead>
+    <tr><th>Function / Class</th><th>Parameters</th><th>Return Type</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>createEngine</code></td><td><code>(options: BitNetOptions)</code></td><td><code>BitNetEngine</code></td><td>Factory helper initializing a BitNet thin gateway instance.</td></tr>
+    <tr><td><code>detectHardware</code></td><td><code>()</code></td><td><code>HardwareInfo</code></td><td>Queries host CPU arch, core count, NEON, and DotProd support.</td></tr>
+    <tr><td><code>downloadModel</code></td><td><code>(alias: string, destDir?: string, force?: boolean)</code></td><td><code>Promise&lt;string&gt;</code></td><td>Downloads verified model with HTTP Range support.</td></tr>
+    <tr><td><code>listModels</code></td><td><code>()</code></td><td><code>void</code></td><td>Prints verified 1.58-bit model registry table to stdout.</td></tr>
+  </tbody>
+</table>
+
     </main>
   </div>
 

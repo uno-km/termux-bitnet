@@ -18,10 +18,10 @@
       <h1 data-i18n="common.brand">Termux-BitNet</h1>
     </a>
     <div class="header-controls">
-      <span class="release-tag" data-i18n="common.releaseTag">v1.0.6 (Production Ready)</span>
+      <span class="release-tag" data-i18n="common.releaseTag">v1.0.6</span>
       <div class="lang-selector-wrapper"></div>
-      <a href="https://pypi.org/project/termux-bitnet/" target="_blank" class="header-btn" data-i18n="common.pypiBtn">PyPI (pip)</a>
-      <a href="https://www.npmjs.com/package/termux-bitnet" target="_blank" class="header-btn npm-btn" data-i18n="common.npmBtn">npm</a>
+      <a href="/foundation/index.html" class="header-btn" style="border-color:#2563eb;color:#2563eb;font-weight:600;" data-i18n="common.foundationBtn">Foundation</a>
+      <a href="https://pypi.org/project/termux-bitnet/" target="_blank" class="header-btn" title="PyPI: termux-bitnet | npm: termux-bitnet" data-i18n="common.pkgBtn">pip / npm</a>
       <a href="https://github.com/sponsors/uno-km" target="_blank" class="header-btn" style="border-color: #ea4aaa; color: #ea4aaa; font-weight: 700;">Sponsor</a>
       <a href="https://github.com/uno-km/termux-bitnet" target="_blank" class="header-btn primary" data-i18n="common.githubBtn">GitHub</a>
       <a href="/" class="header-btn" style="border-color:#004499;color:#004499;font-weight:600;" data-i18n="common.founderBtn">Founder CV</a>
@@ -30,21 +30,23 @@
 
   <div class="container">
   <nav class="sidebar">
-    <!-- Tier 1: Foundation Info -->
-    <h3 data-i18n="common.nav.foundation">Foundation Info</h3>
+    <!-- Tier 1: Primary Document / Foundation Navigation -->
+    <h3 data-i18n="common.nav.docNav">Document Navigation</h3>
     <ul>
-      <li><a href="/foundation/index.html">Foundation Portal</a></li>
-      <li><a href="/foundation/charter.html">Foundation Charter</a></li>
-      <li><a href="/foundation/governance.html">Governance & Merit</a></li>
-      <li><a href="/foundation/incubation.html">Incubation Policy</a></li>
-      <li><a href="/foundation/sponsorship.html">Sponsorship & Support</a></li>
-      <li><a href="/foundation/dashboard/">3D Neural Fabric Map</a></li>
+      <li><a href="index.html">Home / Architecture</a></li>
+      <li><a href="installation.html" class="active">Installation Guide</a></li>
+      <li><a href="quickstart.html">Quickstart & Recipes</a></li>
+      <li><a href="api-reference.html">API Reference</a></li>
+      <li><a href="benchmarks.html">Benchmarks & Profiling</a></li>
+      <li><a href="advanced-parameters.html">Advanced Parameters</a></li>
+      <li><a href="versions.html">Version Archive</a></li>
     </ul>
     <!-- Tier 2: Flagship Libraries -->
     <h3 data-i18n="common.nav.libraries">Flagship Libraries</h3>
     <ul>
       <li><a href="/lib/sentinel/">AMEVA-Sentinel (Security SDK)</a></li>
       <li><a href="/lib/mcp/">AMEVA-MCP-Hub (Polyglot WASM)</a></li>
+      <li><a href="/lib/aichain/">Termux-AIChain (Zero-Dep Agent)</a></li>
       <li><a href="/lib/bitnet/" class="active">Termux-BitNet (1.58-bit LLM)</a></li>
       <li><a href="/lib/diffusion/">Termux-Diffusion (Image AI)</a></li>
       <li><a href="/lib/playwright/">Termux-Playwright (Automation)</a></li>
@@ -53,25 +55,13 @@
       <li><a href="/lib/forge/">AMEVA-Forge (WebGPU Autograd)</a></li>
       <li><a href="https://ameva-workstation-web-core.vercel.app/" target="_blank">AMEVA Workstation (Web App)</a></li>
     </ul>
-    <!-- Tier 3: Active Document Sections -->
-    <h3 data-i18n="common.nav.docNav">Document Navigation</h3>
-    <ul>
-      <li><a href="index.html" data-i18n="common.nav.home">Home / Architecture</a></li>
-      <li><a href="installation.html" class="active" data-i18n="common.nav.installation">Installation Guide</a></li>
-      <li><a href="quickstart.html" data-i18n="common.nav.quickstart">Quickstart & Recipes</a></li>
-      <li><a href="api-reference.html" data-i18n="common.nav.apiReference">API Reference</a></li>
-      <li><a href="benchmarks.html" data-i18n="common.nav.benchmarks">Benchmarks & Profiling</a></li>
-      <li><a href="advanced-parameters.html" data-i18n="common.nav.advancedParams">Advanced Parameters</a></li>
-      <li><a href="versions.html" data-i18n="common.nav.versions">Version Archive</a></li>
-    </ul>
-    <!-- Tier 4: AI Protocols & Specifications -->
+    <!-- Tier 3: AI Protocols & Specifications -->
     <h3 data-i18n="common.nav.aiSpecs">AI Agent Protocols</h3>
     <ul>
       <li><a href="llms.txt" target="_blank">llms.txt (AI Fast Context)</a></li>
       <li><a href="llms-full.txt" target="_blank">llms-full.txt (Full Spec)</a></li>
       <li><a href="robots.txt" target="_blank">robots.txt (AI Crawlers)</a></li>
       <li><a href="sitemap.xml" target="_blank">sitemap.xml (Sitemap)</a></li>
-      <li><a href="/" target="_blank">Founder Digital CV</a></li>
     </ul>
   </nav>
 
@@ -79,14 +69,41 @@
       <h2>Installation & Setup Guide</h2>
       <p class="subtitle">Hardware acceleration, Termux setup, and dependency management</p>
       <div class="alert alert-tip">
-           <span class="alert-title">Prerequisites</span>
-           <p>Ensure Python 3.9+ or Node.js 18+ is installed on your Linux / Android / Desktop environment.</p>
-         </div>
-         <h3>Package Managers</h3>
-         <pre><code>pip install termux-bitnet
-# or: npm install -g termux-bitnet</code></pre>
-         <h3>Verification Check</h3>
-         <pre><code>python -c "import termux-bitnet; print('Installation OK')"</code></pre>
+  <span class="alert-title">Target Environment &amp; Prerequisites</span>
+  <p>Engineered for native execution on Android Termux (ARM64 / aarch64), Ubuntu/Debian ARM64, and Linux. Requires Python 3.8+ or Node.js 18+.</p>
+</div>
+
+<h3>1. Android Termux One-Touch Setup (Recommended)</h3>
+<p>Update repository packages and install required native build toolchains in a single command:</p>
+<pre><code class="language-bash"># 1. Install toolchains and dependencies
+pkg update -y
+pkg install -y clang cmake git python python-pip openblas libandroid-execinfo nodejs
+
+# 2. Pre-provision Python build tools (Bypasses PyPI build-isolation bottleneck)
+pip install --upgrade setuptools wheel
+
+# 3. Install termux-bitnet Python SDK &amp; CLI
+pip install --no-build-isolation termux-bitnet</code></pre>
+
+<h3>2. Node.js Dual Engine Gateway (npm)</h3>
+<p>Install the ultra-lightweight Node.js thin gateway with dedicated CLI namespace:</p>
+<pre><code class="language-bash"># Global install without binary conflict (Provides termux-bitnet-js)
+npm install -g termux-bitnet</code></pre>
+
+<h3>3. Hardware SIMD Diagnostics Verification</h3>
+<p>Execute the diagnostic CLI to confirm ARM NEON and DotProd (<code>vdotq_s32</code>) hardware acceleration:</p>
+<pre><code class="language-bash"># Python CLI check
+termux-bitnet info
+
+# Node.js CLI check
+termux-bitnet-js info</code></pre>
+
+<h3>4. Source Installation from GitHub</h3>
+<pre><code class="language-bash">git clone https://github.com/uno-km/termux-bitnet.git
+cd termux-bitnet
+chmod +x install.sh
+./install.sh</code></pre>
+
     </main>
   </div>
 

@@ -18,10 +18,10 @@
       <h1 data-i18n="common.brand">Termux-BitNet</h1>
     </a>
     <div class="header-controls">
-      <span class="release-tag" data-i18n="common.releaseTag">v1.0.6 (Production Ready)</span>
+      <span class="release-tag" data-i18n="common.releaseTag">v1.0.6</span>
       <div class="lang-selector-wrapper"></div>
-      <a href="https://pypi.org/project/termux-bitnet/" target="_blank" class="header-btn" data-i18n="common.pypiBtn">PyPI (pip)</a>
-      <a href="https://www.npmjs.com/package/termux-bitnet" target="_blank" class="header-btn npm-btn" data-i18n="common.npmBtn">npm</a>
+      <a href="/foundation/index.html" class="header-btn" style="border-color:#2563eb;color:#2563eb;font-weight:600;" data-i18n="common.foundationBtn">Foundation</a>
+      <a href="https://pypi.org/project/termux-bitnet/" target="_blank" class="header-btn" title="PyPI: termux-bitnet | npm: termux-bitnet" data-i18n="common.pkgBtn">pip / npm</a>
       <a href="https://github.com/sponsors/uno-km" target="_blank" class="header-btn" style="border-color: #ea4aaa; color: #ea4aaa; font-weight: 700;">Sponsor</a>
       <a href="https://github.com/uno-km/termux-bitnet" target="_blank" class="header-btn primary" data-i18n="common.githubBtn">GitHub</a>
       <a href="/" class="header-btn" style="border-color:#004499;color:#004499;font-weight:600;" data-i18n="common.founderBtn">Founder CV</a>
@@ -30,21 +30,23 @@
 
   <div class="container">
   <nav class="sidebar">
-    <!-- Tier 1: Foundation Info -->
-    <h3 data-i18n="common.nav.foundation">Foundation Info</h3>
+    <!-- Tier 1: Primary Document / Foundation Navigation -->
+    <h3 data-i18n="common.nav.docNav">Document Navigation</h3>
     <ul>
-      <li><a href="/foundation/index.html">Foundation Portal</a></li>
-      <li><a href="/foundation/charter.html">Foundation Charter</a></li>
-      <li><a href="/foundation/governance.html">Governance & Merit</a></li>
-      <li><a href="/foundation/incubation.html">Incubation Policy</a></li>
-      <li><a href="/foundation/sponsorship.html">Sponsorship & Support</a></li>
-      <li><a href="/foundation/dashboard/">3D Neural Fabric Map</a></li>
+      <li><a href="index.html">Home / Architecture</a></li>
+      <li><a href="installation.html">Installation Guide</a></li>
+      <li><a href="quickstart.html" class="active">Quickstart & Recipes</a></li>
+      <li><a href="api-reference.html">API Reference</a></li>
+      <li><a href="benchmarks.html">Benchmarks & Profiling</a></li>
+      <li><a href="advanced-parameters.html">Advanced Parameters</a></li>
+      <li><a href="versions.html">Version Archive</a></li>
     </ul>
     <!-- Tier 2: Flagship Libraries -->
     <h3 data-i18n="common.nav.libraries">Flagship Libraries</h3>
     <ul>
       <li><a href="/lib/sentinel/">AMEVA-Sentinel (Security SDK)</a></li>
       <li><a href="/lib/mcp/">AMEVA-MCP-Hub (Polyglot WASM)</a></li>
+      <li><a href="/lib/aichain/">Termux-AIChain (Zero-Dep Agent)</a></li>
       <li><a href="/lib/bitnet/" class="active">Termux-BitNet (1.58-bit LLM)</a></li>
       <li><a href="/lib/diffusion/">Termux-Diffusion (Image AI)</a></li>
       <li><a href="/lib/playwright/">Termux-Playwright (Automation)</a></li>
@@ -53,49 +55,90 @@
       <li><a href="/lib/forge/">AMEVA-Forge (WebGPU Autograd)</a></li>
       <li><a href="https://ameva-workstation-web-core.vercel.app/" target="_blank">AMEVA Workstation (Web App)</a></li>
     </ul>
-    <!-- Tier 3: Active Document Sections -->
-    <h3 data-i18n="common.nav.docNav">Document Navigation</h3>
-    <ul>
-      <li><a href="index.html" data-i18n="common.nav.home">Home / Architecture</a></li>
-      <li><a href="installation.html" data-i18n="common.nav.installation">Installation Guide</a></li>
-      <li><a href="quickstart.html" class="active" data-i18n="common.nav.quickstart">Quickstart & Recipes</a></li>
-      <li><a href="api-reference.html" data-i18n="common.nav.apiReference">API Reference</a></li>
-      <li><a href="benchmarks.html" data-i18n="common.nav.benchmarks">Benchmarks & Profiling</a></li>
-      <li><a href="advanced-parameters.html" data-i18n="common.nav.advancedParams">Advanced Parameters</a></li>
-      <li><a href="versions.html" data-i18n="common.nav.versions">Version Archive</a></li>
-    </ul>
-    <!-- Tier 4: AI Protocols & Specifications -->
+    <!-- Tier 3: AI Protocols & Specifications -->
     <h3 data-i18n="common.nav.aiSpecs">AI Agent Protocols</h3>
     <ul>
       <li><a href="llms.txt" target="_blank">llms.txt (AI Fast Context)</a></li>
       <li><a href="llms-full.txt" target="_blank">llms-full.txt (Full Spec)</a></li>
       <li><a href="robots.txt" target="_blank">robots.txt (AI Crawlers)</a></li>
       <li><a href="sitemap.xml" target="_blank">sitemap.xml (Sitemap)</a></li>
-      <li><a href="/" target="_blank">Founder Digital CV</a></li>
     </ul>
   </nav>
 
     <main class="content">
       <h2>Quickstart & Execution Recipes</h2>
       <p class="subtitle">Standard usage patterns and rapid prototyping code</p>
-      <h3>Basic Execution Recipe</h3>
-         <pre><code>from termux_bitnet import BitNetEngine, BitNetConfig
+      <h3>Recipe 1: Model Hub Download &amp; CLI Inference</h3>
+<p>Query verified 1.58-bit GGUF models, download with HTTP Range resume support, and execute instant inference:</p>
+<pre><code class="language-bash"># 1. List official verified models
+termux-bitnet models
 
-# 1. Initialize engine with model & thread configuration
+# 2. Download Microsoft BitNet 2B-4T (1.13 GB)
+termux-bitnet download bitnet-2b
+
+# 3. Run prompt inference with 4 CPU threads
+termux-bitnet run -m ~/.cache/termux-bitnet/models/bitnet-2b-ggml-model-i2_s.gguf \
+  -p "Explain quantum computing in one sentence." \
+  -t 4 -c 2048 -n 64 --temp 0.7 --top-p 0.95</code></pre>
+
+<h3>Recipe 2: Python SDK Token Streaming</h3>
+<p>Stream generated tokens asynchronously with context manager memory cleanup:</p>
+<pre><code class="language-python">from termux_bitnet import BitNetEngine, BitNetConfig
+
 config = BitNetConfig(
     model_path="models/bitnet-2b.gguf",
     n_threads=4,
     temperature=0.7,
-    top_p=0.95
+    top_p=0.95,
+    top_k=40,
+    repeat_penalty=1.15
 )
 
-# 2. Stream tokens in real time
 with BitNetEngine(config) as engine:
+    print("[Prompt]: Explain quantum computing in one sentence.")
+    print("[Response]: ", end="", flush=True)
     for token in engine.generate_stream("Explain quantum computing in one sentence:"):
         print(token, end="", flush=True)
-</code></pre>
-         <h3>Production Asynchronous Batching</h3>
-         <p>Utilize weakref pooling and zero-copy streaming buffers for continuous pipelines.</p>
+    print()</code></pre>
+
+<h3>Recipe 3: Node.js / TypeScript Gateway Streaming</h3>
+<pre><code class="language-javascript">const { createEngine } = require('termux-bitnet');
+
+async function main() {
+  const engine = createEngine({
+    modelPath: 'models/bitnet-2b.gguf',
+    threads: 4,
+    temperature: 0.7,
+    topP: 0.95
+  });
+
+  console.log('[Prompt]: Explain quantum computing in one sentence');
+  console.log('[Response]: ');
+
+  await engine.generateStream(
+    'Explain quantum computing in one sentence',
+    64,
+    (token) => {
+      process.stdout.write(token);
+    }
+  );
+  console.log('\n');
+}
+
+main();</code></pre>
+
+<h3>Recipe 4: OpenAI-Compatible Local HTTP API Server</h3>
+<pre><code class="language-bash"># Start local API server on port 8080
+termux-bitnet serve --port 8080 --model ~/.cache/termux-bitnet/models/bitnet-2b-ggml-model-i2_s.gguf
+
+# Query via standard OpenAI client or curl
+curl http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "bitnet-2b",
+    "messages": [{"role": "user", "content": "Hello BitNet!"}]
+  }'</code></pre>
+
     </main>
   </div>
 

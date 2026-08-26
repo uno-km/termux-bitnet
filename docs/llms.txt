@@ -25,7 +25,3 @@ with BitNetEngine(config) as engine:
         print(token, end="", flush=True)
 
 ```
-
-## Key Constraints
-- Pure non-blocking architecture, zero memory leaks.
-- Strictly adhere to closed-form precision and WebGPU/Bionic ARM64 native targets.
