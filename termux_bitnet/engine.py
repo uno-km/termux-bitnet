@@ -142,10 +142,17 @@ class BitNetEngine:
                 "Specify config.model_path or run 'termux-bitnet download bitnet-2b'."
             )
 
+        import unicodedata
+        def _safe_encode(s: str) -> bytes:
+            if not s:
+                return b""
+            clean_s = unicodedata.normalize("NFC", s)
+            return clean_s.encode("utf-8", errors="replace")
+
         c_params = CBitNetParams()
-        c_params.model_path = self.config.model_path.encode("utf-8")
-        c_params.system_prompt = self.config.system_prompt.encode("utf-8") if self.config.system_prompt else b""
-        c_params.stop_tokens = self.config.stop_tokens.encode("utf-8") if self.config.stop_tokens else b""
+        c_params.model_path = _safe_encode(self.config.model_path)
+        c_params.system_prompt = _safe_encode(self.config.system_prompt)
+        c_params.stop_tokens = _safe_encode(self.config.stop_tokens)
         c_params.n_threads = self.config.n_threads
         c_params.n_ctx = self.config.n_ctx
         c_params.n_batch = self.config.n_batch
@@ -204,8 +211,11 @@ class BitNetEngine:
                 chunks.append(text)
             return True
 
+        import unicodedata
+        safe_prompt = unicodedata.normalize("NFC", prompt).encode("utf-8", errors="replace")
+
         cb = STREAM_CB_TYPE(_callback)
-        self._lib.bitnet_generate_stream(self._ctx, prompt.encode("utf-8"), max_tokens, cb, None)
+        self._lib.bitnet_generate_stream(self._ctx, safe_prompt, max_tokens, cb, None)
 
         for chunk in chunks:
             yield chunk

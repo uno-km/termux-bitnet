@@ -7,6 +7,7 @@ import urllib.request
 from pathlib import Path
 
 PREBUILT_LIB_URLS = [
+    "https://github.com/uno-km/termux-bitnet/releases/download/v1.0.9/libtermux_bitnet-arm64-android.so",
     "https://github.com/uno-km/termux-bitnet/releases/download/v1.0.8/libtermux_bitnet-arm64-android.so",
     "https://github.com/uno-km/termux-bitnet/releases/download/v1.0.7/libtermux_bitnet-arm64-android.so",
 ]
