@@ -188,11 +188,70 @@ class BitNetEngine:
         hw = detect_hardware()
         return f"Python-Engine | Arch: {hw.arch} | NEON: {hw.has_neon} | DotProd: {hw.has_dotprod} | Cores: {hw.cpu_cores}"
 
+    def _find_bitnet_cli_binary(self) -> Optional[str]:
+        import shutil
+        candidates = [
+            os.path.expanduser("~/BitNet_ms/3rdparty/llama.cpp/build/bin/llama-cli"),
+            os.path.expanduser("~/.local/bin/llama-cli"),
+            "/data/data/com.termux/files/usr/bin/llama-cli",
+            shutil.which("llama-cli"),
+        ]
+        for c in candidates:
+            if c and os.path.isfile(c) and os.access(c, os.X_OK):
+                return c
+        return None
+
     def generate_stream(self, prompt: str, max_tokens: int = 128) -> Generator[str, None, None]:
-        """Stream generation tokens as they are produced by the C++ engine."""
+        """Stream generation tokens produced directly by the BitNet neural network."""
         if not prompt or not prompt.strip():
             raise ValueError("[termux-bitnet] Prompt cannot be empty. Please provide a valid prompt string.")
 
+        # 1. First priority: Execute genuine 1.58-bit neural network inference via native BitNet C++ binary
+        cli_bin = self._find_bitnet_cli_binary()
+        if cli_bin and self.config.model_path and os.path.isfile(self.config.model_path):
+            import subprocess
+            cmd = [
+                cli_bin,
+                "-m", self.config.model_path,
+                "-p", prompt,
+                "-n", str(max_tokens),
+                "-t", str(self.config.n_threads),
+                "--temp", str(self.config.temperature),
+                "--top-p", str(self.config.top_p),
+                "--top-k", str(self.config.top_k),
+                "--simple-io",
+                "--no-warmup",
+            ]
+            env = os.environ.copy()
+            lib_dir = os.path.dirname(cli_bin)
+            env["LD_LIBRARY_PATH"] = f"{lib_dir}:{env.get('LD_LIBRARY_PATH', '')}"
+            try:
+                proc = subprocess.Popen(
+                    cmd,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    env=env,
+                    bufsize=1,
+                )
+                started = False
+                for line in iter(proc.stdout.readline, ''):
+                    if not started:
+                        if line.startswith(">") or line.strip() == "" or "build :" in line or "model :" in line:
+                            if line.startswith(">"):
+                                started = True
+                            continue
+                    yield line
+                proc.stdout.close()
+                proc.wait()
+                return
+            except Exception:
+                pass
+
+        # 2. Fallback to native C ABI library
         if not self._lib:
             raise BitNetEngineNotFound(
                 "Native BitNet C++ runtime library is not loaded.\n"

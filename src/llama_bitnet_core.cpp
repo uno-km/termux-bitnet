@@ -321,56 +321,55 @@ int32_t bitnet_generate_stream(bitnet_context_t ctx, const char* prompt, int32_t
         return 0;
     }
 
-    std::string prompt_str(prompt);
-    std::string prompt_lower = prompt_str;
-    std::transform(prompt_lower.begin(), prompt_lower.end(), prompt_lower.begin(), ::tolower);
-
-    // Natural responsive phrases based on prompt semantics
-    std::vector<std::string> words_to_stream;
-    if (prompt_lower.find("quantum") != std::string::npos) {
-        words_to_stream = {
-            "Quantum", " computing", " harnesses", " quantum", " mechanical", " phenomena",
-            " such", " as", " superposition", " and", " entanglement", " to", " perform",
-            " complex", " calculations", " exponentially", " faster", " than", " classical",
-            " binary", " computers."
-        };
-    } else if (prompt_lower.find("bitnet") != std::string::npos || prompt_lower.find("architecture") != std::string::npos || prompt_lower.find("1.58") != std::string::npos) {
-        words_to_stream = {
-            "BitNet", " b1.58", " replaces", " traditional", " matrix", " multiplications",
-            " with", " ternary", " {-1, 0, +1}", " addition", " and", " subtraction",
-            " operations,", " achieving", " dramatic", " energy", " efficiency",
-            " and", " a", " sub-350MB", " memory", " footprint."
-        };
-    } else if (prompt_lower.find("hello") != std::string::npos || prompt_lower == "hi" || prompt_lower.find("hi ") == 0 || prompt_lower.find(" hi") != std::string::npos || prompt_lower.find("ㅗㅑ") != std::string::npos) {
-        words_to_stream = {
-            "Hello!", " How", " can", " I", " assist", " you", " with", " BitNet",
-            " 1.58-bit", " on-device", " AI", " inference", " on", " your", " device", " today?"
-        };
+    std::string full_prompt;
+    if (!ctx->system_prompt.empty()) {
+        full_prompt = ctx->system_prompt + "\n" + prompt;
     } else {
-        words_to_stream = {
-            "BitNet", " 1.58-bit", " on-device", " inference", " engine", " processed",
-            " your", " request", " with", " high", " efficiency", " using", " ARM",
-            " NEON", " and", " DotProd", " SIMD", " acceleration."
-        };
+        full_prompt = prompt;
     }
 
+    std::vector<int32_t> prompt_tokens(ctx->params.n_ctx);
+    int32_t n_prompt = bitnet_tokenize(ctx, full_prompt.c_str(), prompt_tokens.data(), (int32_t)prompt_tokens.size());
+    if (n_prompt <= 0) {
+        std::cerr << "[termux-bitnet ERROR] bitnet_generate_stream: Tokenization produced 0 tokens." << std::endl;
+        return 0;
+    }
+
+    ctx->metrics.prompt_tokens = n_prompt;
     auto t_start_prompt = std::chrono::high_resolution_clock::now();
-    ctx->metrics.prompt_tokens = (int32_t)prompt_str.length() / 4 + 1;
+    bitnet_eval(ctx, prompt_tokens.data(), n_prompt);
     auto t_end_prompt = std::chrono::high_resolution_clock::now();
     ctx->metrics.prompt_eval_ms = std::chrono::duration<double, std::milli>(t_end_prompt - t_start_prompt).count();
 
     int32_t generated_count = 0;
     auto t_start_eval = std::chrono::high_resolution_clock::now();
 
-    for (size_t i = 0; i < words_to_stream.size() && (int32_t)i < max_new_tokens; ++i) {
-        const std::string& token_str = words_to_stream[i];
-        int32_t tok_id = 3 + (int32_t)i;
+    char token_buf[128];
+    for (int32_t i = 0; i < max_new_tokens; ++i) {
+        int32_t next_tok = bitnet_sample(ctx);
+        if (next_tok == ctx->vocab.eos_id) break;
+
+        bitnet_token_to_str(ctx, next_tok, token_buf, sizeof(token_buf));
+        if (std::strlen(token_buf) == 0) break;
+
+        // Stop word check
+        bool stop_triggered = false;
+        for (const auto& sw : ctx->stop_words) {
+            if (std::strcmp(token_buf, sw.c_str()) == 0) {
+                stop_triggered = true;
+                break;
+            }
+        }
+        if (stop_triggered) break;
+
         generated_count++;
 
         if (callback) {
-            bool keep_going = callback(token_str.c_str(), tok_id, user_data);
+            bool keep_going = callback(token_buf, next_tok, user_data);
             if (!keep_going) break;
         }
+
+        bitnet_eval(ctx, &next_tok, 1);
     }
 
     auto t_end_eval = std::chrono::high_resolution_clock::now();
