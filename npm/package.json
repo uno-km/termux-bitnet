@@ -1,6 +1,6 @@
 {
   "name": "termux-bitnet",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "description": "Production 1.58-bit (i2_s) BitNet On-Device Inference SDK & Thin Gateway for Node.js on Android Termux & ARM64",
   "main": "index.js",
   "types": "index.d.ts",
