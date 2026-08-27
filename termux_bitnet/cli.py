@@ -29,19 +29,29 @@ def print_catalog_help():
     print("  - https://huggingface.co/1bitLLM/bitnet_b1_58-3B-GGUF", file=sys.stderr)
 
 
-def validate_model_path_or_exit(model_path: str) -> str:
-    if not model_path or not model_path.strip():
-        print("[termux-bitnet ERROR] No model file specified. Use -m or --model <path>.", file=sys.stderr)
-        print_catalog_help()
-        sys.exit(10)
-
-    expanded = os.path.abspath(os.path.expanduser(model_path))
-    if not os.path.isfile(expanded):
+def validate_model_path_or_exit(model_path: str = None) -> str:
+    if model_path and model_path.strip():
+        expanded = os.path.abspath(os.path.expanduser(model_path))
+        if os.path.isfile(expanded):
+            return expanded
         print(f"[termux-bitnet ERROR] Model file not found at path: '{expanded}'", file=sys.stderr)
         print_catalog_help()
         sys.exit(10)
 
-    return expanded
+    # Auto-discover in cache directory
+    cache_dir = Path.home() / ".cache" / "termux-bitnet" / "models"
+    if cache_dir.exists():
+        for preferred in ["bitnet_b1_58-large.Q4_0.gguf", "bitnet-large.gguf", "bitnet-2b-ggml-model-i2_s.gguf"]:
+            p = cache_dir / preferred
+            if p.exists() and p.is_file():
+                return str(p)
+        ggufs = list(cache_dir.glob("*.gguf"))
+        if ggufs:
+            return str(ggufs[0])
+
+    print("[termux-bitnet ERROR] No model file specified and no cached models found. Use -m or run: termux-bitnet download", file=sys.stderr)
+    print_catalog_help()
+    sys.exit(10)
 
 
 def cmd_info(args):
@@ -229,10 +239,10 @@ def main():
 
     # run
     p_run = subparsers.add_parser("run", help="Run single prompt inference (Strict Validation)")
-    p_run.add_argument("-m", "--model", required=True, help="Path to GGUF model binary (*.gguf)")
+    p_run.add_argument("-m", "--model", default=None, help="Path to GGUF model binary (default: auto-discover cached model)")
     p_run.add_argument("-p", "--prompt", default=None, help="Input prompt text")
     p_run.add_argument("-f", "--file", help="Path to prompt text file")
-    p_run.add_argument("-t", "--threads", type=int, default=4, help="Worker threads")
+    p_run.add_argument("-t", "--threads", type=int, default=8, help="Worker threads (default: 8)")
     p_run.add_argument("-c", "--ctx-size", type=int, default=2048, help="Context size (default: 2048)")
     p_run.add_argument("-b", "--batch-size", type=int, default=512, help="Batch size (default: 512)")
     p_run.add_argument("-ub", "--ubatch-size", type=int, default=512, help="Micro-batch size (default: 512)")
@@ -256,8 +266,8 @@ def main():
 
     # chat
     p_chat = subparsers.add_parser("chat", help="Start interactive chat REPL")
-    p_chat.add_argument("-m", "--model", required=True, help="Path to GGUF model binary (*.gguf)")
-    p_chat.add_argument("-t", "--threads", type=int, default=4, help="Worker threads")
+    p_chat.add_argument("-m", "--model", default=None, help="Path to GGUF model binary (default: auto-discover cached model)")
+    p_chat.add_argument("-t", "--threads", type=int, default=8, help="Worker threads (default: 8)")
     p_chat.add_argument("-c", "--ctx-size", type=int, default=2048, help="Context size")
     p_chat.add_argument("-n", "--n-predict", type=int, default=256, help="Max tokens per turn")
     p_chat.add_argument("--temp", type=float, default=0.7, help="Temperature")
@@ -270,14 +280,14 @@ def main():
 
     # serve
     p_serve = subparsers.add_parser("serve", help="Run OpenAI-compatible local API server")
-    p_serve.add_argument("-m", "--model", required=True, help="Path to GGUF model binary (*.gguf)")
+    p_serve.add_argument("-m", "--model", default=None, help="Path to GGUF model binary (default: auto-discover cached model)")
     p_serve.add_argument("--host", default="0.0.0.0", help="Binding host")
     p_serve.add_argument("--port", type=int, default=8080, help="Port number")
     p_serve.set_defaults(func=cmd_serve)
 
     # benchmark
     p_bench = subparsers.add_parser("benchmark", help="Run inference performance benchmark")
-    p_bench.add_argument("-m", "--model", required=True, help="Path to GGUF model binary (*.gguf)")
+    p_bench.add_argument("-m", "--model", default=None, help="Path to GGUF model binary (default: auto-discover cached model)")
     p_bench.add_argument("-t", "--threads", type=int, default=4, help="Worker threads")
     p_bench.set_defaults(func=cmd_benchmark)
 
