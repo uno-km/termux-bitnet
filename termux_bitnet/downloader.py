@@ -2,6 +2,7 @@
 
 import os
 import sys
+import difflib
 import requests
 from pathlib import Path
 from typing import Optional
@@ -67,10 +68,30 @@ def verify_model_file(file_path: Path) -> bool:
 
 def download_model(model_name: str = "bitnet-2b", output_dir: Optional[Path] = None, force: bool = False) -> str:
     """Download 1.58-bit quantized GGUF model with streaming progress bar and resume support."""
-    if model_name not in AVAILABLE_MODELS:
-        raise ValueError(f"Unknown model '{model_name}'. Available: {list(AVAILABLE_MODELS.keys())}")
+    if not model_name or not model_name.strip():
+        raise ValueError(
+            "[termux-bitnet ERROR] Model name cannot be empty.\n"
+            f"Available verified models: {list(AVAILABLE_MODELS.keys())}\n"
+            "Example: termux-bitnet download bitnet-2b"
+        )
 
-    model_info = AVAILABLE_MODELS[model_name]
+    clean_name = model_name.strip()
+    if clean_name not in AVAILABLE_MODELS:
+        closest = difflib.get_close_matches(clean_name.lower(), AVAILABLE_MODELS.keys(), n=1, cutoff=0.35)
+        if closest:
+            raise ValueError(
+                f"[termux-bitnet ERROR] Model name typo detected: '{clean_name}'. Did you mean '{closest[0]}'?\n"
+                f"Available verified models: {list(AVAILABLE_MODELS.keys())}\n"
+                f"Run: termux-bitnet download {closest[0]}"
+            )
+        else:
+            raise ValueError(
+                f"[termux-bitnet ERROR] Unknown model '{clean_name}'.\n"
+                f"Available verified models: {list(AVAILABLE_MODELS.keys())}\n"
+                "Run 'termux-bitnet models' to inspect all verified models."
+            )
+
+    model_info = AVAILABLE_MODELS[clean_name]
     target_dir = Path(output_dir) if output_dir else DEFAULT_CACHE_DIR
     target_dir.mkdir(parents=True, exist_ok=True)
     target_path = target_dir / f"{model_name}-{model_info['file']}"

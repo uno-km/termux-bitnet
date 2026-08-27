@@ -65,35 +65,76 @@ class OpenAIHandler(BaseHTTPRequestHandler):
             self._set_headers(404)
             self.wfile.write(json.dumps({"error": "Endpoint Not Found"}).encode("utf-8"))
 
+    def _send_json_error(self, status_code: int, message: str, error_type: str = "invalid_request_error"):
+        self._set_headers(status_code)
+        err_payload = {
+            "error": {
+                "message": message,
+                "type": error_type,
+                "code": status_code,
+            }
+        }
+        self.wfile.write(json.dumps(err_payload).encode("utf-8"))
+
     def _handle_chat_completions(self, data):
+        if not OpenAIHandler.engine:
+            self._send_json_error(
+                503,
+                "[termux-bitnet ERROR] BitNet engine is not initialized.\n"
+                "Please start the server with a valid model: termux-bitnet serve -m <model_path>\n"
+                "Or download a model: termux-bitnet download bitnet-2b",
+                "service_unavailable"
+            )
+            return
+
         messages = data.get("messages", [])
+        if not messages or not isinstance(messages, list):
+            self._send_json_error(
+                400,
+                "[termux-bitnet ERROR] 'messages' field is required and must be a non-empty array of message objects.",
+                "invalid_request_error"
+            )
+            return
+
         stream = data.get("stream", False)
         max_tokens = data.get("max_tokens", 256)
-        temp = data.get("temperature", 0.7)
-        top_p = data.get("top_p", 0.95)
 
         # Reconstruct full conversation prompt
         prompt_lines = []
+        has_content = False
         for msg in messages:
             role = msg.get("role", "user")
             content = msg.get("content", "")
+            if content and str(content).strip():
+                has_content = True
             prompt_lines.append(f"{role.capitalize()}: {content}")
         prompt_lines.append("Assistant: ")
         prompt = "\n".join(prompt_lines)
+
+        if not has_content:
+            self._send_json_error(
+                400,
+                "[termux-bitnet ERROR] Messages cannot be all empty. Please provide valid message text.",
+                "invalid_request_error"
+            )
+            return
 
         req_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
         created = int(time.time())
 
         if stream:
-            self.send_response(200)
-            self.send_header("Content-Type", "text/event-stream")
-            self.send_header("Cache-Control", "no-cache")
-            self.send_header("Connection", "keep-alive")
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.end_headers()
+            try:
+                # Test iterator before streaming headers to fail-fast
+                stream_iter = OpenAIHandler.engine.generate_stream(prompt, max_tokens=max_tokens)
+                
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Connection", "keep-alive")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
 
-            if OpenAIHandler.engine:
-                for chunk in OpenAIHandler.engine.generate_stream(prompt, max_tokens=max_tokens):
+                for chunk in stream_iter:
                     chunk_obj = {
                         "id": req_id,
                         "object": "chat.completion.chunk",
@@ -106,59 +147,78 @@ class OpenAIHandler(BaseHTTPRequestHandler):
                     self.wfile.write(f"data: {json.dumps(chunk_obj)}\n\n".encode("utf-8"))
                     self.wfile.flush()
 
-            done_obj = {
-                "id": req_id,
-                "object": "chat.completion.chunk",
-                "created": created,
-                "model": "bitnet-b1.58-2b-4t",
-                "choices": [
-                    {"index": 0, "delta": {}, "finish_reason": "stop"}
-                ]
-            }
-            self.wfile.write(f"data: {json.dumps(done_obj)}\n\ndata: [DONE]\n\n".encode("utf-8"))
-            self.wfile.flush()
-        else:
-            self._set_headers(200)
-            full_response = ""
-            if OpenAIHandler.engine:
-                full_response = OpenAIHandler.engine.generate(prompt, max_tokens=max_tokens)
-
-            resp_obj = {
-                "id": req_id,
-                "object": "chat.completion",
-                "created": created,
-                "model": "bitnet-b1.58-2b-4t",
-                "choices": [
-                    {
-                        "index": 0,
-                        "message": {"role": "assistant", "content": full_response},
-                        "finish_reason": "stop"
-                    }
-                ],
-                "usage": {
-                    "prompt_tokens": len(prompt.split()),
-                    "completion_tokens": len(full_response.split()),
-                    "total_tokens": len(prompt.split()) + len(full_response.split())
+                done_obj = {
+                    "id": req_id,
+                    "object": "chat.completion.chunk",
+                    "created": created,
+                    "model": "bitnet-b1.58-2b-4t",
+                    "choices": [
+                        {"index": 0, "delta": {}, "finish_reason": "stop"}
+                    ]
                 }
-            }
-            self.wfile.write(json.dumps(resp_obj).encode("utf-8"))
+                self.wfile.write(f"data: {json.dumps(done_obj)}\n\ndata: [DONE]\n\n".encode("utf-8"))
+                self.wfile.flush()
+            except Exception as e:
+                self._send_json_error(500, f"[termux-bitnet ERROR] Inference execution failed: {e}", "internal_error")
+        else:
+            try:
+                full_response = OpenAIHandler.engine.generate(prompt, max_tokens=max_tokens)
+                self._set_headers(200)
+                resp_obj = {
+                    "id": req_id,
+                    "object": "chat.completion",
+                    "created": created,
+                    "model": "bitnet-b1.58-2b-4t",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {"role": "assistant", "content": full_response},
+                            "finish_reason": "stop"
+                        }
+                    ],
+                    "usage": {
+                        "prompt_tokens": len(prompt.split()),
+                        "completion_tokens": len(full_response.split()),
+                        "total_tokens": len(prompt.split()) + len(full_response.split())
+                    }
+                }
+                self.wfile.write(json.dumps(resp_obj).encode("utf-8"))
+            except Exception as e:
+                self._send_json_error(500, f"[termux-bitnet ERROR] Inference execution failed: {e}", "internal_error")
 
     def _handle_completions(self, data):
-        prompt = data.get("prompt", "")
-        max_tokens = data.get("max_tokens", 256)
-        full_response = ""
-        if OpenAIHandler.engine:
-            full_response = OpenAIHandler.engine.generate(prompt, max_tokens=max_tokens)
+        if not OpenAIHandler.engine:
+            self._send_json_error(
+                503,
+                "[termux-bitnet ERROR] BitNet engine is not initialized.\n"
+                "Please start the server with a valid model: termux-bitnet serve -m <model_path>",
+                "service_unavailable"
+            )
+            return
 
-        resp_obj = {
-            "id": f"cmpl-{uuid.uuid4().hex[:12]}",
-            "object": "text_completion",
-            "created": int(time.time()),
-            "model": "bitnet-b1.58-2b-4t",
-            "choices": [{"text": full_response, "index": 0, "finish_reason": "stop"}]
-        }
-        self._set_headers(200)
-        self.wfile.write(json.dumps(resp_obj).encode("utf-8"))
+        prompt = data.get("prompt", "")
+        if not prompt or not str(prompt).strip():
+            self._send_json_error(
+                400,
+                "[termux-bitnet ERROR] 'prompt' field cannot be empty. Please provide valid text input.",
+                "invalid_request_error"
+            )
+            return
+
+        max_tokens = data.get("max_tokens", 256)
+        try:
+            full_response = OpenAIHandler.engine.generate(prompt, max_tokens=max_tokens)
+            resp_obj = {
+                "id": f"cmpl-{uuid.uuid4().hex[:12]}",
+                "object": "text_completion",
+                "created": int(time.time()),
+                "model": "bitnet-b1.58-2b-4t",
+                "choices": [{"text": full_response, "index": 0, "finish_reason": "stop"}]
+            }
+            self._set_headers(200)
+            self.wfile.write(json.dumps(resp_obj).encode("utf-8"))
+        except Exception as e:
+            self._send_json_error(500, f"[termux-bitnet ERROR] Inference execution failed: {e}", "internal_error")
 
 
 def run_server(host: str = "0.0.0.0", port: int = 8080, model_path: str = ""):

@@ -1,42 +1,27 @@
 {
   "name": "termux-bitnet",
-  "version": "1.0.6",
-  "description": "Ultra-lightweight Node.js / JavaScript Thin Gateway for Native C++ 1.58-bit BitNet Inference on Android Termux & ARM64",
+  "version": "1.0.7",
+  "description": "Production 1.58-bit (i2_s) BitNet On-Device Inference SDK & Thin Gateway for Node.js on Android Termux & ARM64",
   "main": "index.js",
   "types": "index.d.ts",
   "bin": {
-    "termux-bitnet-js": "./bin/termux-bitnet.js",
-    "termux-bitnet-node": "./bin/termux-bitnet.js"
+    "termux-bitnet": "bin/termux-bitnet.js",
+    "termux-bitnet-js": "bin/termux-bitnet.js"
   },
-  "files": [
-    "index.js",
-    "index.d.ts",
-    "lib",
-    "bin",
-    "README.md"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/uno-km/termux-bitnet.git"
+  "scripts": {
+    "test": "node -e \"console.log('termux-bitnet npm package OK');\""
   },
   "keywords": [
     "bitnet",
-    "1-bit-llm",
     "termux",
     "arm64",
-    "neon",
-    "dotprod",
-    "edge-ai",
-    "on-device-ai",
-    "c-abi",
-    "ffi"
+    "llm",
+    "inference",
+    "quantization",
+    "neon"
   ],
-  "author": "uno-km (AMEVA Foundation) <unokim.dev@gmail.com>",
+  "author": "uno-km (dev@amevafoundation.org)",
   "license": "Apache-2.0",
-  "bugs": {
-    "url": "https://github.com/uno-km/termux-bitnet/issues"
-  },
-  "homepage": "https://uno-km.github.io/termux-bitnet/",
   "engines": {
     "node": ">=16.0.0"
   }

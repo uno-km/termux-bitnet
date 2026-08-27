@@ -1,8 +1,10 @@
-"""Command Line Interface for termux-bitnet."""
+"""Command Line Interface for termux-bitnet (Strict Fail-Fast Protocol)."""
 
+import os
 import sys
 import argparse
 import time
+from pathlib import Path
 
 from termux_bitnet import __version__
 from termux_bitnet.config import BitNetConfig
@@ -10,6 +12,36 @@ from termux_bitnet.engine import BitNetEngine
 from termux_bitnet.hardware import print_hardware_summary, detect_hardware
 from termux_bitnet.downloader import download_model, AVAILABLE_MODELS
 from termux_bitnet.server import run_server
+
+
+def print_catalog_help():
+    print("\n[Available Official BitNet Models]", file=sys.stderr)
+    print("  1. bitnet-2b    : Microsoft BitNet 2B-4T (1.13 GB, i2_s)", file=sys.stderr)
+    print("     Command      : termux-bitnet download bitnet-2b", file=sys.stderr)
+    print("  2. bitnet-large : BitNet b1.58 Large 0.7B (700 MB, i2_s)", file=sys.stderr)
+    print("     Command      : termux-bitnet download bitnet-large", file=sys.stderr)
+    print("  3. bitnet-3b    : BitNet b1.58 3B (2.4 GB, i2_s)", file=sys.stderr)
+    print("     Command      : termux-bitnet download bitnet-3b", file=sys.stderr)
+    print("  4. bitnet-3b-q4 : BitNet b1.58 3B Q4_K_M (1.8 GB)", file=sys.stderr)
+    print("     Command      : termux-bitnet download bitnet-3b-q4", file=sys.stderr)
+    print("\nOfficial Hugging Face Repositories:", file=sys.stderr)
+    print("  - https://huggingface.co/1bitLLM/bitnet_b1_58-large-GGUF", file=sys.stderr)
+    print("  - https://huggingface.co/1bitLLM/bitnet_b1_58-3B-GGUF", file=sys.stderr)
+
+
+def validate_model_path_or_exit(model_path: str) -> str:
+    if not model_path or not model_path.strip():
+        print("[termux-bitnet ERROR] No model file specified. Use -m or --model <path>.", file=sys.stderr)
+        print_catalog_help()
+        sys.exit(10)
+
+    expanded = os.path.abspath(os.path.expanduser(model_path))
+    if not os.path.isfile(expanded):
+        print(f"[termux-bitnet ERROR] Model file not found at path: '{expanded}'", file=sys.stderr)
+        print_catalog_help()
+        sys.exit(10)
+
+    return expanded
 
 
 def cmd_info(args):
@@ -21,13 +53,26 @@ def cmd_download(args):
 
 
 def cmd_run(args):
+    # 1. Validate Prompt
     prompt_text = args.prompt
     if args.file:
-        with open(args.file, "r", encoding="utf-8") as f:
+        file_path = os.path.abspath(os.path.expanduser(args.file))
+        if not os.path.isfile(file_path):
+            print(f"[termux-bitnet ERROR] Prompt file not found: '{file_path}'", file=sys.stderr)
+            sys.exit(2)
+        with open(file_path, "r", encoding="utf-8") as f:
             prompt_text = f.read()
 
+    if not prompt_text or not prompt_text.strip():
+        print("[termux-bitnet ERROR] No input prompt specified. Use -p / --prompt \"<text>\" or -f / --file <path>.", file=sys.stderr)
+        print("Example:\n  termux-bitnet run -m ~/.cache/termux-bitnet/models/bitnet-2b.gguf -p \"Explain 1-bit LLM:\"", file=sys.stderr)
+        sys.exit(2)
+
+    # 2. Validate Model
+    resolved_model = validate_model_path_or_exit(args.model)
+
     config = BitNetConfig(
-        model_path=args.model or "",
+        model_path=resolved_model,
         system_prompt=args.system_prompt or "",
         stop_tokens=args.stop or "",
         n_threads=args.threads,
@@ -52,27 +97,34 @@ def cmd_run(args):
 
     print("=========================================================")
     print(f"  termux-bitnet CLI (v{__version__})")
+    print(f"  Model:  {resolved_model}")
     print(f"  Prompt: {prompt_text[:80]}...")
     print("=========================================================")
     print("[Response]: ", end="", flush=True)
 
-    with BitNetEngine(config) as engine:
-        t0 = time.time()
-        for token in engine.generate_stream(prompt_text, max_tokens=args.n_predict):
-            sys.stdout.write(token)
-            sys.stdout.flush()
-        t1 = time.time()
+    try:
+        with BitNetEngine(config) as engine:
+            t0 = time.time()
+            for token in engine.generate_stream(prompt_text, max_tokens=args.n_predict):
+                sys.stdout.write(token)
+                sys.stdout.flush()
+            t1 = time.time()
 
-        metrics = engine.get_last_metrics()
-        print("\n\n---------------------------------------------------------")
-        print(f"  Inference Speed: {metrics.tokens_per_second:.2f} tokens/sec")
-        print(f"  Total Duration:  {(t1 - t0)*1000:.1f} ms")
-        print("---------------------------------------------------------")
+            metrics = engine.get_last_metrics()
+            print("\n\n---------------------------------------------------------")
+            print(f"  Inference Speed: {metrics.tokens_per_second:.2f} tokens/sec")
+            print(f"  Total Duration:  {(t1 - t0)*1000:.1f} ms")
+            print("---------------------------------------------------------")
+    except Exception as e:
+        print(f"\n[termux-bitnet ERROR] Execution failed: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 def cmd_chat(args):
+    resolved_model = validate_model_path_or_exit(args.model)
+
     config = BitNetConfig(
-        model_path=args.model or "",
+        model_path=resolved_model,
         system_prompt=args.system_prompt or "",
         stop_tokens=args.stop or "",
         n_threads=args.threads,
@@ -85,36 +137,45 @@ def cmd_chat(args):
 
     print("=========================================================")
     print(f"  termux-bitnet Interactive Chat (v{__version__})")
+    print(f"  Model: {resolved_model}")
     print("  Type 'exit' or 'quit' to end session.")
     print("=========================================================")
 
-    with BitNetEngine(config) as engine:
-        while True:
-            try:
-                user_input = input("\nUser > ").strip()
-                if not user_input:
-                    continue
-                if user_input.lower() in ("exit", "quit", "q"):
-                    print("Exiting chat session.")
-                    break
+    try:
+        with BitNetEngine(config) as engine:
+            while True:
+                try:
+                    user_input = input("\nUser > ").strip()
+                    if not user_input:
+                        continue
+                    if user_input.lower() in ("exit", "quit", "q"):
+                        print("Exiting chat session.")
+                        break
 
-                print("Assistant > ", end="", flush=True)
-                for chunk in engine.generate_stream(user_input, max_tokens=args.n_predict):
-                    sys.stdout.write(chunk)
-                    sys.stdout.flush()
-                print()
-            except KeyboardInterrupt:
-                print("\nSession interrupted.")
-                break
+                    print("Assistant > ", end="", flush=True)
+                    for chunk in engine.generate_stream(user_input, max_tokens=args.n_predict):
+                        sys.stdout.write(chunk)
+                        sys.stdout.flush()
+                    print()
+                except KeyboardInterrupt:
+                    print("\nSession interrupted.")
+                    break
+    except Exception as e:
+        print(f"[termux-bitnet ERROR] Chat initialization failed: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 def cmd_serve(args):
-    run_server(host=args.host, port=args.port, model_path=args.model or "")
+    resolved_model = validate_model_path_or_exit(args.model)
+    run_server(host=args.host, port=args.port, model_path=resolved_model)
 
 
 def cmd_benchmark(args):
+    resolved_model = validate_model_path_or_exit(args.model)
+
     print("=========================================================")
     print("        termux-bitnet Comprehensive Benchmark            ")
+    print(f"  Model: {resolved_model}")
     print("=========================================================")
     print_hardware_summary()
 
@@ -124,19 +185,23 @@ def cmd_benchmark(args):
         ("Psychology (CBT Analysis)", "Analyze: 'I made a mistake, so I am a total failure and will lose my job.'"),
     ]
 
-    config = BitNetConfig(n_threads=args.threads)
-    with BitNetEngine(config) as engine:
-        for title, p in prompts:
-            print(f"\n[Running Benchmark: {title}]")
-            t0 = time.time()
-            resp = engine.generate(p, max_tokens=100)
-            t1 = time.time()
-            dur = t1 - t0
-            tps = len(resp.split()) / max(dur, 0.001)
-            print(f"  Result Length: {len(resp)} chars")
-            print(f"  Elapsed Time:  {dur:.2f} sec")
-            print(f"  Estimated TPS: {tps:.2f} tokens/sec")
-    print("\nBenchmark successfully completed.")
+    config = BitNetConfig(model_path=resolved_model, n_threads=args.threads)
+    try:
+        with BitNetEngine(config) as engine:
+            for title, p in prompts:
+                print(f"\n[Running Benchmark: {title}]")
+                t0 = time.time()
+                resp = engine.generate(p, max_tokens=100)
+                t1 = time.time()
+                dur = t1 - t0
+                tps = len(resp.split()) / max(dur, 0.001)
+                print(f"  Result Length: {len(resp)} chars")
+                print(f"  Elapsed Time:  {dur:.2f} sec")
+                print(f"  Estimated TPS: {tps:.2f} tokens/sec")
+        print("\nBenchmark successfully completed.")
+    except Exception as e:
+        print(f"[termux-bitnet ERROR] Benchmark failed: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 def main():
@@ -159,10 +224,10 @@ def main():
     p_dl.set_defaults(func=cmd_download)
 
     # run
-    p_run = subparsers.add_parser("run", help="Run single prompt inference")
-    p_run.add_argument("-m", "--model", help="Path to GGUF model")
-    p_run.add_argument("-p", "--prompt", default="The capital of France is", help="Input prompt")
-    p_run.add_argument("-f", "--file", help="Path to prompt file")
+    p_run = subparsers.add_parser("run", help="Run single prompt inference (Strict Validation)")
+    p_run.add_argument("-m", "--model", required=True, help="Path to GGUF model binary (*.gguf)")
+    p_run.add_argument("-p", "--prompt", default=None, help="Input prompt text")
+    p_run.add_argument("-f", "--file", help="Path to prompt text file")
     p_run.add_argument("-t", "--threads", type=int, default=4, help="Worker threads")
     p_run.add_argument("-c", "--ctx-size", type=int, default=2048, help="Context size (default: 2048)")
     p_run.add_argument("-b", "--batch-size", type=int, default=512, help="Batch size (default: 512)")
@@ -187,7 +252,7 @@ def main():
 
     # chat
     p_chat = subparsers.add_parser("chat", help="Start interactive chat REPL")
-    p_chat.add_argument("-m", "--model", help="Path to GGUF model")
+    p_chat.add_argument("-m", "--model", required=True, help="Path to GGUF model binary (*.gguf)")
     p_chat.add_argument("-t", "--threads", type=int, default=4, help="Worker threads")
     p_chat.add_argument("-c", "--ctx-size", type=int, default=2048, help="Context size")
     p_chat.add_argument("-n", "--n-predict", type=int, default=256, help="Max tokens per turn")
@@ -201,13 +266,14 @@ def main():
 
     # serve
     p_serve = subparsers.add_parser("serve", help="Run OpenAI-compatible local API server")
-    p_serve.add_argument("-m", "--model", help="Path to GGUF model")
+    p_serve.add_argument("-m", "--model", required=True, help="Path to GGUF model binary (*.gguf)")
     p_serve.add_argument("--host", default="0.0.0.0", help="Binding host")
     p_serve.add_argument("--port", type=int, default=8080, help="Port number")
     p_serve.set_defaults(func=cmd_serve)
 
     # benchmark
     p_bench = subparsers.add_parser("benchmark", help="Run inference performance benchmark")
+    p_bench.add_argument("-m", "--model", required=True, help="Path to GGUF model binary (*.gguf)")
     p_bench.add_argument("-t", "--threads", type=int, default=4, help="Worker threads")
     p_bench.set_defaults(func=cmd_benchmark)
 

@@ -1,4 +1,4 @@
-"""High-level Python SDK Engine for BitNet 1.58-bit (i2_s) inference."""
+"""High-level Python SDK Engine for BitNet 1.58-bit (i2_s) inference (Strict Fail-Fast Architecture)."""
 
 import os
 import sys
@@ -8,6 +8,7 @@ from pathlib import Path
 
 from termux_bitnet.config import BitNetConfig, GenerationMetrics
 from termux_bitnet.hardware import detect_hardware
+from termux_bitnet.exceptions import BitNetEngineNotFound, RuntimeNotFoundError
 
 
 # C ABI Structures
@@ -49,11 +50,25 @@ class BitNetEngine:
             hw = detect_hardware()
             self.config.n_threads = hw.recommended_threads
 
+        # Strict validation of model_path if provided
+        if self.config.model_path:
+            expanded = os.path.abspath(os.path.expanduser(self.config.model_path))
+            if not os.path.isfile(expanded):
+                raise FileNotFoundError(
+                    f"[termux-bitnet] Model file not found at: '{expanded}'.\n"
+                    f"Download a verified BitNet model using:\n"
+                    f"  termux-bitnet download bitnet-2b       (Microsoft BitNet 2B-4T, 1.13 GB)\n"
+                    f"  termux-bitnet download bitnet-large    (BitNet Large 0.7B, 700 MB)\n"
+                    f"  termux-bitnet download bitnet-3b       (BitNet 3B, 2.4 GB)\n"
+                    f"Or visit Hugging Face: https://huggingface.co/1bitLLM/bitnet_b1_58-large-GGUF"
+                )
+            self.config.model_path = expanded
+
         self._lib = self._load_native_library()
         self._ctx = None
         self._setup_bindings()
 
-        if self._lib:
+        if self._lib and self.config.model_path:
             self._init_context()
 
     def _find_library_path(self) -> Optional[Path]:
@@ -121,8 +136,14 @@ class BitNetEngine:
 
     def _init_context(self) -> None:
         """Instantiate C context from config."""
+        if not self.config.model_path:
+            raise ValueError(
+                "[termux-bitnet] Cannot initialize BitNet engine context without a valid model_path. "
+                "Specify config.model_path or run 'termux-bitnet download bitnet-2b'."
+            )
+
         c_params = CBitNetParams()
-        c_params.model_path = self.config.model_path.encode("utf-8") if self.config.model_path else b""
+        c_params.model_path = self.config.model_path.encode("utf-8")
         c_params.system_prompt = self.config.system_prompt.encode("utf-8") if self.config.system_prompt else b""
         c_params.stop_tokens = self.config.stop_tokens.encode("utf-8") if self.config.stop_tokens else b""
         c_params.n_threads = self.config.n_threads
@@ -145,6 +166,11 @@ class BitNetEngine:
         c_params.verbose = self.config.verbose
 
         self._ctx = self._lib.bitnet_init(ctypes.byref(c_params))
+        if not self._ctx:
+            raise RuntimeError(
+                f"[termux-bitnet] Failed to initialize native model context from '{self.config.model_path}'. "
+                f"Verify that the model file is a valid 1.58-bit GGUF binary."
+            )
 
     def get_hardware_info(self) -> str:
         """Return native runtime hardware diagnostic string."""
@@ -157,12 +183,18 @@ class BitNetEngine:
 
     def generate_stream(self, prompt: str, max_tokens: int = 128) -> Generator[str, None, None]:
         """Stream generation tokens as they are produced by the C++ engine."""
-        if not self._ctx or not self._lib:
-            raise RuntimeError(
-                "Native BitNet C++ runtime library is not loaded or context initialization failed.\n"
-                "Please install/compile the native engine by running: termux-bitnet install\n"
+        if not prompt or not prompt.strip():
+            raise ValueError("[termux-bitnet] Prompt cannot be empty. Please provide a valid prompt string.")
+
+        if not self._lib:
+            raise BitNetEngineNotFound(
+                "Native BitNet C++ runtime library is not loaded.\n"
+                "Please compile/install the native engine by running: termux-bitnet install\n"
                 "Or verify your ARM64 device environment."
             )
+
+        if not self._ctx:
+            self._init_context()
 
         chunks: List[str] = []
 
