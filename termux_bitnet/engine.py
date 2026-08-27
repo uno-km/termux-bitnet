@@ -223,6 +223,8 @@ class BitNetEngine:
                 "--no-warmup",
             ]
             env = os.environ.copy()
+            env["LANG"] = "C.UTF-8"
+            env["LC_ALL"] = "C.UTF-8"
             lib_dir = os.path.dirname(cli_bin)
             env["LD_LIBRARY_PATH"] = f"{lib_dir}:{env.get('LD_LIBRARY_PATH', '')}"
             try:
@@ -237,14 +239,23 @@ class BitNetEngine:
                     env=env,
                     bufsize=1,
                 )
-                started = False
-                for line in iter(proc.stdout.readline, ''):
-                    if not started:
-                        if line.startswith(">") or line.strip() == "" or "build :" in line or "model :" in line:
-                            if line.startswith(">"):
-                                started = True
-                            continue
-                    yield line
+                header_passed = False
+                buf = ""
+                while True:
+                    ch = proc.stdout.read(1)
+                    if not ch:
+                        break
+                    if not header_passed:
+                        buf += ch
+                        if "> " in buf:
+                            header_passed = True
+                            buf = ""
+                        elif len(buf) > 1024:
+                            header_passed = True
+                            yield buf
+                            buf = ""
+                    else:
+                        yield ch
                 proc.stdout.close()
                 proc.wait()
                 return
