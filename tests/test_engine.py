@@ -22,34 +22,24 @@ class TestTermuxBitNet(unittest.TestCase):
             hw_str = engine.get_hardware_info()
             self.assertGreater(len(hw_str), 0)
 
-    def test_03_palindrome_code_generation(self):
-        """Verify coding logical precision for palindrome problem."""
+    def test_03_runtime_missing_raises_error(self):
+        """Verify engine raises RuntimeError instead of returning fake text when native lib is missing."""
         with BitNetEngine() as engine:
-            prompt = "Write a Python function to check if a string is a palindrome. Provide only code."
-            resp = engine.generate(prompt, max_tokens=100)
-            self.assertTrue("def is_palindrome" in resp or "s[::-1]" in resp or "palindrome" in resp.lower())
+            if not engine._lib:
+                with self.assertRaises(RuntimeError) as cm:
+                    engine.generate("Hello world")
+                self.assertIn("Native BitNet C++ runtime library is not loaded", str(cm.exception))
+            else:
+                resp = engine.generate("Hello world", max_tokens=10)
+                self.assertIsInstance(resp, str)
 
-    def test_04_harmonic_mean_math(self):
-        """Verify mathematical reasoning avoids the arithmetic mean trap."""
+    def test_04_streaming_runtime_missing_raises_error(self):
+        """Verify streaming generation also fails cleanly without fake fallback when lib is missing."""
         with BitNetEngine() as engine:
-            prompt = "A train goes from City A to B at 60 mph and returns at 40 mph. What is average speed?"
-            resp = engine.generate(prompt, max_tokens=100)
-            self.assertTrue("48" in resp or "harmonic" in resp.lower() or "distance" in resp.lower())
-
-    def test_05_cbt_psychology_analysis(self):
-        """Verify psychological cognitive distortion identification."""
-        with BitNetEngine() as engine:
-            prompt = "Analyze CBT perspective: 'I made a mistake, so I am a complete failure and will lose my job.'"
-            resp = engine.generate(prompt, max_tokens=100)
-            self.assertTrue("all-or-nothing" in resp.lower() or "black-and-white" in resp.lower() or "catastrophizing" in resp.lower() or "reframing" in resp.lower())
-
-    def test_06_streaming_generation(self):
-        """Verify streaming token emission."""
-        with BitNetEngine() as engine:
-            chunks = list(engine.generate_stream("Hello world", max_tokens=20))
-            self.assertGreater(len(chunks), 0)
-            full_text = "".join(chunks)
-            self.assertGreater(len(full_text), 0)
+            if not engine._lib:
+                with self.assertRaises(RuntimeError) as cm:
+                    list(engine.generate_stream("Hello", max_tokens=10))
+                self.assertIn("Native BitNet C++ runtime library is not loaded", str(cm.exception))
 
     def test_08_comprehensive_config_parameters(self):
         """Verify full parameter matrix initialization in BitNetConfig."""
@@ -85,7 +75,7 @@ class TestTermuxBitNet(unittest.TestCase):
 
     def test_09_model_registry_integrity(self):
         """Verify AVAILABLE_MODELS contains all valid aliases, HTTPS URLs, and metadata."""
-        from termux_bitnet.downloader import AVAILABLE_MODELS, verify_model_file
+        from termux_bitnet.downloader import AVAILABLE_MODELS
         self.assertIn("bitnet-2b", AVAILABLE_MODELS)
         self.assertIn("bitnet-large", AVAILABLE_MODELS)
         self.assertIn("bitnet-3b", AVAILABLE_MODELS)
@@ -112,7 +102,6 @@ class TestTermuxBitNet(unittest.TestCase):
         """Verify CLI argument parser processes all flags."""
         from termux_bitnet.cli import main
         import sys
-        # Test --help does not crash
         orig_argv = sys.argv
         try:
             sys.argv = ["termux-bitnet", "--help"]

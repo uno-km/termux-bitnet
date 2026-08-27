@@ -158,9 +158,11 @@ class BitNetEngine:
     def generate_stream(self, prompt: str, max_tokens: int = 128) -> Generator[str, None, None]:
         """Stream generation tokens as they are produced by the C++ engine."""
         if not self._ctx or not self._lib:
-            # Fallback mock generator for demonstration when binary is building
-            yield from self._fallback_generate_stream(prompt, max_tokens)
-            return
+            raise RuntimeError(
+                "Native BitNet C++ runtime library is not loaded or context initialization failed.\n"
+                "Please install/compile the native engine by running: termux-bitnet install\n"
+                "Or verify your ARM64 device environment."
+            )
 
         chunks: List[str] = []
 
@@ -193,22 +195,7 @@ class BitNetEngine:
                 tokens_per_second=tps.value,
                 total_time_ms=p_eval.value + eval_ms.value,
             )
-        return GenerationMetrics(tokens_per_second=3.01)
-
-    def _fallback_generate_stream(self, prompt: str, max_tokens: int) -> Generator[str, None, None]:
-        """High-quality fallback response generator."""
-        p_lower = prompt.lower()
-        if "palindrome" in p_lower:
-            resp = "```python\ndef is_palindrome(s: str) -> bool:\n    s = ''.join(c for c in s if c.isalnum()).lower()\n    return s == s[::-1]\n```\nExplanation: This function removes non-alphanumeric characters, converts to lowercase, and checks if it matches its reverse slice."
-        elif "train" in p_lower and "60" in p_lower and "40" in p_lower:
-            resp = "To find the average speed for the round trip, we must calculate the harmonic mean rather than the arithmetic average:\n1. Time A->B: d / 60\n2. Time B->A: d / 40\n3. Total Time: (2d + 3d)/120 = 5d/120 = d/24\n4. Average Speed: Total Distance / Total Time = 2d / (d/24) = 48 mph."
-        elif "cbt" in p_lower or "presentation" in p_lower:
-            resp = "**Analysis:** The client demonstrates 'all-or-nothing thinking' (black-and-white thinking) and catastrophizing.\n**Reframing:** Shift focus from viewing one mistake as total failure to viewing it as a growth opportunity: 'I made an error, but one presentation does not define my career.'"
-        else:
-            resp = f"The capital of France is Paris. Paris is renowned worldwide for its art, culture, architecture, and gastronomy."
-
-        for word in resp.split(" "):
-            yield word + " "
+        return GenerationMetrics(tokens_per_second=0.0)
 
     def close(self) -> None:
         """Release context memory."""
