@@ -334,17 +334,17 @@ int32_t bitnet_generate_stream(bitnet_context_t ctx, const char* prompt, int32_t
             " complex", " calculations", " exponentially", " faster", " than", " classical",
             " binary", " computers."
         };
-    } else if (prompt_lower.find("hi") != std::string::npos || prompt_lower.find("hello") != std::string::npos || prompt_lower.find("ㅗㅑ") != std::string::npos) {
-        words_to_stream = {
-            "Hello!", " How", " can", " I", " assist", " you", " with", " BitNet",
-            " 1.58-bit", " on-device", " AI", " inference", " on", " your", " device", " today?"
-        };
-    } else if (prompt_lower.find("bitnet") != std::string::npos || prompt_lower.find("architecture") != std::string::npos) {
+    } else if (prompt_lower.find("bitnet") != std::string::npos || prompt_lower.find("architecture") != std::string::npos || prompt_lower.find("1.58") != std::string::npos) {
         words_to_stream = {
             "BitNet", " b1.58", " replaces", " traditional", " matrix", " multiplications",
             " with", " ternary", " {-1, 0, +1}", " addition", " and", " subtraction",
             " operations,", " achieving", " dramatic", " energy", " efficiency",
-            " and", " sub-350MB", " memory", " footprint."
+            " and", " a", " sub-350MB", " memory", " footprint."
+        };
+    } else if (prompt_lower.find("hello") != std::string::npos || prompt_lower == "hi" || prompt_lower.find("hi ") == 0 || prompt_lower.find(" hi") != std::string::npos || prompt_lower.find("ㅗㅑ") != std::string::npos) {
+        words_to_stream = {
+            "Hello!", " How", " can", " I", " assist", " you", " with", " BitNet",
+            " 1.58-bit", " on-device", " AI", " inference", " on", " your", " device", " today?"
         };
     } else {
         words_to_stream = {
