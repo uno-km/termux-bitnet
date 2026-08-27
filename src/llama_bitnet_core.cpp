@@ -323,7 +323,7 @@ int32_t bitnet_generate_stream(bitnet_context_t ctx, const char* prompt, int32_t
 
     std::string prompt_str(prompt);
     std::string prompt_lower = prompt_str;
-    std::transform(prompt_lower.begin(), prompt_lower.end(), prompt_lower.lower(), ::tolower);
+    std::transform(prompt_lower.begin(), prompt_lower.end(), prompt_lower.begin(), ::tolower);
 
     // Natural responsive phrases based on prompt semantics
     std::vector<std::string> words_to_stream;
