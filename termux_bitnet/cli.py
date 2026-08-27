@@ -212,6 +212,10 @@ def main():
     parser.add_argument("-v", "--version", action="version", version=f"termux-bitnet {__version__}")
     subparsers = parser.add_subparsers(dest="command", help="Available subcommands")
 
+    # install
+    p_inst = subparsers.add_parser("install", help="1-Click installer and prebuilt engine dispatcher")
+    p_inst.set_defaults(func=lambda args: __import__("termux_bitnet.installer", fromlist=["main"]).main())
+
     # info
     p_info = subparsers.add_parser("info", help="Inspect local CPU SIMD/DotProd capabilities")
     p_info.set_defaults(func=cmd_info)
