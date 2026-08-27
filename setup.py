@@ -45,7 +45,7 @@ class CMakeBuild(build_ext):
 
 setup(
     name="termux-bitnet",
-    version="1.0.13",
+    version="1.0.14",
     packages=find_packages(),
     ext_modules=[CMakeExtension("termux_bitnet._libtermux_bitnet")],
     cmdclass={"build_ext": CMakeBuild},

@@ -234,7 +234,7 @@ class BitNetEngine:
                     cmd,
                     stdin=subprocess.DEVNULL,
                     stdout=subprocess.PIPE,
-                    stderr=subprocess.DEVNULL,
+                    stderr=subprocess.STDOUT,
                     text=True,
                     encoding="utf-8",
                     errors="replace",
@@ -242,12 +242,15 @@ class BitNetEngine:
                 )
                 stdout_data, _ = proc.communicate(timeout=90)
                 clean_output = stdout_data
-                if "> " in clean_output:
-                    clean_output = clean_output.split("> ", 1)[-1]
+                if f"> {prompt}" in clean_output:
+                    clean_output = clean_output.split(f"> {prompt}", 1)[-1]
+                elif "> " in clean_output:
+                    clean_output = clean_output.rsplit("> ", 1)[-1]
                 for line in clean_output.splitlines():
-                    if line.startswith("build :") or line.startswith("model :") or "modalities :" in line or "ftype :" in line or "Loading model" in line or "available commands:" in line:
+                    if line.startswith("build :") or line.startswith("model :") or "modalities :" in line or "ftype :" in line or "Loading model" in line or "available commands:" in line or "[ Prompt:" in line:
                         continue
-                    yield line + "\n"
+                    if line.strip():
+                        yield line.strip() + " "
                 return
             except Exception:
                 pass
