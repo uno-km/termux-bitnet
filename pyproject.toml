@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "termux-bitnet"
-version = "1.0.12"
+version = "1.0.13"
 description = "Production 1.58-bit (i2_s) BitNet On-Device Inference SDK for Android Termux & ARM64"
 readme = "README.md"
 license = { text = "Apache-2.0" }

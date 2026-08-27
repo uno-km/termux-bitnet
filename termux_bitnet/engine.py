@@ -216,10 +216,12 @@ class BitNetEngine:
                 "-p", prompt,
                 "-n", str(max_tokens),
                 "-t", str(self.config.n_threads),
+                "-c", "512",
                 "--temp", str(self.config.temperature),
                 "--top-p", str(self.config.top_p),
                 "--top-k", str(self.config.top_k),
-                "--simple-io",
+                "--repeat-penalty", str(self.config.repeat_penalty),
+                "--repeat-last-n", str(self.config.repeat_last_n),
                 "--no-warmup",
             ]
             env = os.environ.copy()
@@ -237,27 +239,15 @@ class BitNetEngine:
                     encoding="utf-8",
                     errors="replace",
                     env=env,
-                    bufsize=1,
                 )
-                header_passed = False
-                buf = ""
-                while True:
-                    ch = proc.stdout.read(1)
-                    if not ch:
-                        break
-                    if not header_passed:
-                        buf += ch
-                        if "> " in buf:
-                            header_passed = True
-                            buf = ""
-                        elif len(buf) > 1024:
-                            header_passed = True
-                            yield buf
-                            buf = ""
-                    else:
-                        yield ch
-                proc.stdout.close()
-                proc.wait()
+                stdout_data, _ = proc.communicate(timeout=90)
+                clean_output = stdout_data
+                if "> " in clean_output:
+                    clean_output = clean_output.split("> ", 1)[-1]
+                for line in clean_output.splitlines():
+                    if line.startswith("build :") or line.startswith("model :") or "modalities :" in line or "ftype :" in line or "Loading model" in line or "available commands:" in line:
+                        continue
+                    yield line + "\n"
                 return
             except Exception:
                 pass
