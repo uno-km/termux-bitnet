@@ -66,6 +66,7 @@ class BitNetEngine:
 
         self._lib = self._load_native_library()
         self._ctx = None
+        self._last_metrics = GenerationMetrics()
         self._setup_bindings()
 
         if self._lib and self.config.model_path:
@@ -222,6 +223,7 @@ class BitNetEngine:
                 "--top-k", str(self.config.top_k),
                 "--repeat-penalty", str(self.config.repeat_penalty),
                 "--repeat-last-n", str(self.config.repeat_last_n),
+                "--simple-io",
                 "--no-warmup",
             ]
             env = os.environ.copy()
@@ -230,27 +232,65 @@ class BitNetEngine:
             lib_dir = os.path.dirname(cli_bin)
             env["LD_LIBRARY_PATH"] = f"{lib_dir}:{env.get('LD_LIBRARY_PATH', '')}"
             try:
+                import time
+                t0 = time.time()
                 proc = subprocess.Popen(
                     cmd,
                     stdin=subprocess.DEVNULL,
                     stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
+                    stderr=subprocess.PIPE,
                     text=True,
+                    bufsize=1,
                     encoding="utf-8",
                     errors="replace",
                     env=env,
                 )
-                stdout_data, _ = proc.communicate(timeout=90)
-                clean_output = stdout_data
-                if f"> {prompt}" in clean_output:
-                    clean_output = clean_output.split(f"> {prompt}", 1)[-1]
-                elif "> " in clean_output:
-                    clean_output = clean_output.rsplit("> ", 1)[-1]
-                for line in clean_output.splitlines():
-                    if line.startswith("build :") or line.startswith("model :") or "modalities :" in line or "ftype :" in line or "Loading model" in line or "available commands:" in line or "[ Prompt:" in line:
+
+                prompt_buffer = ""
+                prompt_stripped = False
+                clean_tokens = []
+
+                while True:
+                    char = proc.stdout.read(1)
+                    if not char:
+                        if proc.poll() is not None:
+                            break
                         continue
-                    if line.strip():
-                        yield line.strip() + " "
+
+                    if not prompt_stripped:
+                        prompt_buffer += char
+                        clean_pb = prompt_buffer.strip()
+                        clean_pr = prompt.strip()
+                        if clean_pb.startswith(clean_pr) or clean_pr in clean_pb:
+                            prompt_stripped = True
+                            idx = prompt_buffer.find(prompt)
+                            if idx != -1:
+                                remainder = prompt_buffer[idx + len(prompt):]
+                            else:
+                                remainder = ""
+                            if remainder:
+                                clean_tokens.append(remainder)
+                                yield remainder
+                        elif len(prompt_buffer) > len(prompt) + 64:
+                            prompt_stripped = True
+                            clean_tokens.append(prompt_buffer)
+                            yield prompt_buffer
+                    else:
+                        clean_tokens.append(char)
+                        yield char
+
+                proc.wait()
+                t1 = time.time()
+                elapsed_sec = max(t1 - t0, 0.001)
+                full_text = "".join(clean_tokens)
+                token_count = max(len(full_text.split()), 1)
+                tps = token_count / elapsed_sec
+                self._last_metrics = GenerationMetrics(
+                    generated_tokens=token_count,
+                    eval_time_ms=elapsed_sec * 1000.0,
+                    tokens_per_second=tps,
+                    total_time_ms=elapsed_sec * 1000.0,
+                )
                 return
             except Exception:
                 pass
@@ -300,7 +340,7 @@ class BitNetEngine:
                 tokens_per_second=tps.value,
                 total_time_ms=p_eval.value + eval_ms.value,
             )
-        return GenerationMetrics(tokens_per_second=0.0)
+        return self._last_metrics
 
     def close(self) -> None:
         """Release context memory."""

@@ -29,6 +29,27 @@ class BitNetConfig:
     flash_attn: bool = False
     verbose: bool = False
 
+    def __post_init__(self):
+        """Auto-discover cached model if model_path is not explicitly provided."""
+        if not self.model_path or not self.model_path.strip():
+            from pathlib import Path
+            import os
+            cache_dir = Path.home() / ".cache" / "termux-bitnet" / "models"
+            if cache_dir.exists():
+                for preferred in [
+                    "bitnet_b1_58-large.Q4_0.gguf",
+                    "bitnet-large-bitnet_b1_58-large.Q4_0.gguf",
+                    "bitnet-large.gguf",
+                    "bitnet-2b-ggml-model-i2_s.gguf",
+                ]:
+                    p = cache_dir / preferred
+                    if p.exists() and p.is_file():
+                        self.model_path = str(p)
+                        return
+                ggufs = list(cache_dir.glob("*.gguf"))
+                if ggufs:
+                    self.model_path = str(ggufs[0])
+
 
 @dataclass
 class GenerationMetrics:

@@ -60,8 +60,11 @@ def detect_hardware() -> HardwareProfile:
         except Exception:
             pass
 
-    # Recommendation heuristic: For 8-core Big.LITTLE (e.g. 4 Big + 4 Little), 4~8 threads
-    recommended_threads = min(cpu_cores, 8) if cpu_cores >= 4 else cpu_cores
+    # Recommendation heuristic: On 8-core mobile Big.LITTLE (4 Big + 4 Little), 4 big cores prevent thermal throttling
+    if is_termux and cpu_cores >= 8:
+        recommended_threads = 4
+    else:
+        recommended_threads = min(cpu_cores, 4) if cpu_cores >= 4 else cpu_cores
 
     return HardwareProfile(
         arch=arch,

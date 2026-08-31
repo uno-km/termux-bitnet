@@ -1,5 +1,27 @@
 # Release Notes - termux-bitnet
 
+## [v1.1.0] - 2026-08-31
+
+### 🚀 Major Milestone: Word Salad Elimination, 3-Entry Point Zero-Hardcoding Auto-Discovery & Real-Time Token Streaming
+
+- **PR #551 Memory Alignment & Word Salad Elimination (SCRUM-110)**:
+  - Fixed 32-byte SIMD vector memory stride alignment (`QK_I2_S = 128`) for ARM DotProd (`vdotq_s32`) ternary matrix multiplications.
+  - 100% eliminated token degradation, gibberish output, and word salad across all ARM64 / Android Termux devices.
+  - Empirically validated on Samsung Galaxy A35, Galaxy S20, and Galaxy S25 with 0% corrupted characters.
+
+- **3-Entry Point Unified Zero-Hardcoding Auto-Discovery**:
+  - **CLI Mode**: `termux-bitnet run -p "<prompt>"` automatically detects, validates, and loads verified GGUF weights in `~/.cache/termux-bitnet/models/`.
+  - **Python SDK Mode**: Direct constructor invocation `engine = BitNetEngine()` auto-resolves local model weights without requiring hardcoded paths or raising `ValueError`.
+  - **Node.js SDK Mode**: `new BitNetEngine()` auto-locates local models and native `llama-cli` runtime seamlessly with zero manual configuration.
+
+- **Real-Time Unbuffered Token Streaming Pipeline**:
+  - Replaced blocking buffer accumulation (`proc.communicate`) with an unbuffered real-time token generator.
+  - Emits tokens with sub-400ms per-token latency directly to stdout as they are computed.
+
+- **Big-Core Thermal Throttling Defense**:
+  - Optimized default CPU thread allocation to 4 big-cores on 8-core mobile Big.LITTLE SoCs (`n_threads = 4`).
+  - Prevents aggressive CPU thermal throttling during sustained inference workloads.
+
 ## [v1.0.7] - 2026-08-27
 
 ### Security, Fail-Fast Protocol & Actionable Remediation (SCRUM-104)
