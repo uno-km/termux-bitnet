@@ -20,16 +20,39 @@ class HardwareProfile:
     recommended_threads: int
 
 
+# [B방안] Platform SSOT: ameva-vulkan-runtime.platform 에서 공유 구현을 가져옵니다.
+try:
+    from ameva_vulkan_runtime.platform import (
+        is_termux as _ameva_is_termux,
+        is_proot as _ameva_is_proot,
+    )
+    _AMEVA_PLATFORM_AVAILABLE = True
+except ImportError:
+    _AMEVA_PLATFORM_AVAILABLE = False
+
+
+def is_termux() -> bool:
+    """Check whether running in Termux."""
+    if _AMEVA_PLATFORM_AVAILABLE:
+        return _ameva_is_termux()
+    return "TERMUX_VERSION" in os.environ or os.path.exists("/data/data/com.termux")
+
+
+def is_proot() -> bool:
+    """Check whether running in PRoot."""
+    if _AMEVA_PLATFORM_AVAILABLE:
+        return _ameva_is_proot()
+    return "PROOT_TMP_DIR" in os.environ or os.path.exists("/proc/sys/fs/binfmt_misc/proot")
+
+
 def detect_hardware() -> HardwareProfile:
     """Inspect local hardware environment and return optimal inference configuration.
 
-    [버그 수정] 기존 코드에서 `is_termux` 라는 지역 bool 변수가 같은 모듈 내
-    `is_termux()` 함수(미래에 추가될 수 있는)와 이름 충돌(shadowing)을 일으킬 수 있었습니다.
-    지역 변수명을 `_is_termux_env` 로 변경하였습니다. HardwareProfile API 는 불변입니다.
+    [B방안] ameva-vulkan-runtime.platform 에서 플랫폼 감지를 통합 위임합니다.
     """
     arch = platform.machine().lower()
-    _is_termux_env = "TERMUX_VERSION" in os.environ or os.path.exists("/data/data/com.termux")
-    is_proot = "PROOT_TMP_DIR" in os.environ or os.path.exists("/proc/sys/fs/binfmt_misc/proot")
+    _is_termux_env = is_termux()
+    _is_proot_env = is_proot()
 
     has_neon = False
     has_dotprod = False
