@@ -21,9 +21,14 @@ class HardwareProfile:
 
 
 def detect_hardware() -> HardwareProfile:
-    """Inspect local hardware environment and return optimal inference configuration."""
+    """Inspect local hardware environment and return optimal inference configuration.
+
+    [버그 수정] 기존 코드에서 `is_termux` 라는 지역 bool 변수가 같은 모듈 내
+    `is_termux()` 함수(미래에 추가될 수 있는)와 이름 충돌(shadowing)을 일으킬 수 있었습니다.
+    지역 변수명을 `_is_termux_env` 로 변경하였습니다. HardwareProfile API 는 불변입니다.
+    """
     arch = platform.machine().lower()
-    is_termux = "TERMUX_VERSION" in os.environ or os.path.exists("/data/data/com.termux")
+    _is_termux_env = "TERMUX_VERSION" in os.environ or os.path.exists("/data/data/com.termux")
     is_proot = "PROOT_TMP_DIR" in os.environ or os.path.exists("/proc/sys/fs/binfmt_misc/proot")
 
     has_neon = False
@@ -57,18 +62,21 @@ def detect_hardware() -> HardwareProfile:
                     soc_name = "Google Tensor"
                 elif "cortex" in content:
                     soc_name = "ARM Cortex Core"
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger("termux_bitnet.hardware").warning(
+                "[termux-bitnet] /proc/cpuinfo 파싱 실패 — SoC/SIMD 감지 건너뜀: %s", e
+            )
 
     # Recommendation heuristic: On 8-core mobile Big.LITTLE (4 Big + 4 Little), 4 big cores prevent thermal throttling
-    if is_termux and cpu_cores >= 8:
+    if _is_termux_env and cpu_cores >= 8:
         recommended_threads = 4
     else:
         recommended_threads = min(cpu_cores, 4) if cpu_cores >= 4 else cpu_cores
 
     return HardwareProfile(
         arch=arch,
-        is_termux=is_termux,
+        is_termux=_is_termux_env,
         is_proot=is_proot,
         has_neon=has_neon,
         has_dotprod=has_dotprod,
