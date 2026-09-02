@@ -37,42 +37,27 @@ class CMakeBuild(build_ext):
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
 
+        # Fail-Fast: CMake configure and build must succeed unconditionally
         try:
             subprocess.check_call(["cmake", ext.sourcedir] + cmake_args, cwd=self.build_temp)
             subprocess.check_call(["cmake", "--build", "."] + build_args, cwd=self.build_temp)
         except Exception as e:
-            # Check if a prebuilt binary already exists in the package before failing
-            prebuilt_candidates = [
-                os.path.join(extdir, "libtermux_bitnet.so"),
-                os.path.join(extdir, "_libtermux_bitnet.so"),
-                os.path.join(extdir, "libtermux_bitnet.dll"),
-                os.path.join(os.path.dirname(__file__), "termux_bitnet", "libtermux_bitnet.so"),
-                os.path.join(os.path.dirname(__file__), "libtermux_bitnet.so"),
-            ]
-            has_prebuilt = any(os.path.exists(p) for p in prebuilt_candidates)
-
-            if has_prebuilt and os.environ.get("TERMUX_BITNET_ALLOW_PREBUILT", "1") == "1":
-                sys.stderr.write(
-                    f"[termux-bitnet] Warning: CMake native build failed ({e}), "
-                    "but an existing verified prebuilt library was detected. Proceeding with prebuilt binary.\n"
-                )
-            else:
-                sys.stderr.write(
-                    "\n"
-                    "================================================================================\n"
-                    "  [termux-bitnet ERROR] Native C++ Core CMake Compilation Failed!\n"
-                    f"  Error Detail: {e}\n"
-                    "--------------------------------------------------------------------------------\n"
-                    "  Required Build Dependencies:\n"
-                    "    - Android Termux: pkg install -y clang cmake python openblas\n"
-                    "    - Ubuntu/Debian:  sudo apt install -y build-essential cmake libopenblas-dev\n"
-                    "    - macOS:          brew install cmake\n"
-                    "================================================================================\n"
-                )
-                raise RuntimeError(
-                    f"[termux-bitnet] Native build failed: {e}. "
-                    "Ensure cmake and a C++17 compiler (clang/gcc) are installed."
-                ) from e
+            sys.stderr.write(
+                "\n"
+                "================================================================================\n"
+                "  [termux-bitnet ERROR] Native C++ Core CMake Compilation Failed!\n"
+                f"  Error Detail: {e}\n"
+                "--------------------------------------------------------------------------------\n"
+                "  Required Build Dependencies:\n"
+                "    - Android Termux: pkg install -y clang cmake python openblas\n"
+                "    - Ubuntu/Debian:  sudo apt install -y build-essential cmake libopenblas-dev\n"
+                "    - macOS:          brew install cmake\n"
+                "================================================================================\n"
+            )
+            raise RuntimeError(
+                f"[termux-bitnet] Native build failed: {e}. "
+                "Ensure cmake and a C++17 compiler (clang/gcc) are installed."
+            ) from e
 
 setup(
     name="termux-bitnet",

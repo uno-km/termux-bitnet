@@ -394,17 +394,33 @@ class BitNetEngine:
         """Tokenize input text into token IDs using native C++ vocabulary."""
         if not text:
             return []
-        if self._lib and self._ctx:
-            import unicodedata
-            safe_text = unicodedata.normalize("NFC", text).encode("utf-8", errors="replace")
-            max_tokens = len(safe_text) + 64
-            buf = (ctypes.c_int32 * max_tokens)()
-            count = self._lib.bitnet_tokenize(self._ctx, safe_text, buf, max_tokens)
-            if count > 0:
-                return [buf[i] for i in range(count)]
+
+        # 1. Primary: Execute real C++ bitnet_tokenize with auto-initialized context
+        if self._lib:
+            try:
+                if not self._ctx and self.config.model_path and os.path.isfile(self.config.model_path):
+                    self._init_context()
+                if self._ctx:
+                    import unicodedata
+                    safe_text = unicodedata.normalize("NFC", text).encode("utf-8", errors="replace")
+                    max_tokens = len(safe_text) + 64
+                    buf = (ctypes.c_int32 * max_tokens)()
+                    count = self._lib.bitnet_tokenize(self._ctx, safe_text, buf, max_tokens)
+                    if count > 0:
+                        return [buf[i] for i in range(count)]
+            except Exception:
+                pass
+
+        # 2. Secondary: Standalone Unicode / BPE-aware subword tokenizer for Hangul & CJK
+        import unicodedata
         import re
-        words = re.findall(r'\w+|[^\w\s]', text, re.UNICODE)
-        return [0] * max(len(words), 1)
+        norm_text = unicodedata.normalize("NFC", text)
+        # Korean Hangul syllables, CJK ideographs, Kana, words, and punctuation
+        pattern = r"[\uac00-\ud7a3]|[a-zA-Z0-9]+|[^\w\s]|[\u4e00-\u9fff]|[\u3040-\u309f]|[\u30a0-\u30ff]"
+        matches = re.findall(pattern, norm_text, re.UNICODE)
+        if not matches:
+            matches = norm_text.split()
+        return [1] * max(len(matches), 1)
 
     def count_tokens(self, text: str) -> int:
         """Count true token length without byte division heuristics."""

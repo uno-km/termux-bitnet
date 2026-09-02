@@ -200,6 +200,35 @@ class TestTermuxBitNetRemediation(unittest.TestCase):
         self.assertIsInstance(tokens, list)
         self.assertEqual(len(tokens), count)
 
+    def test_setup_py_fails_fast_on_cmake_compilation_failure(self):
+        """Direct line verification that setup.py CMakeBuild strictly raises RuntimeError on CMake errors."""
+        import sys
+        import subprocess
+        from pathlib import Path
+        from unittest.mock import patch
+
+        setup_py_path = Path(__file__).parent.parent / "setup.py"
+        self.assertTrue(setup_py_path.exists())
+
+        # Dynamically import CMakeBuild from setup.py
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("setup_module", str(setup_py_path))
+        setup_mod = importlib.util.module_from_spec(spec)
+        
+        # Prevent setup() execution during import
+        with patch("setuptools.setup"):
+            spec.loader.exec_module(setup_mod)
+
+        cmake_ext = setup_mod.CMakeExtension("termux_bitnet._libtermux_bitnet", sourcedir="non_existent_dir")
+        builder = setup_mod.CMakeBuild.__new__(setup_mod.CMakeBuild)
+        builder.build_temp = str(Path(__file__).parent / "_test_build_temp")
+        builder.get_ext_fullpath = lambda name: str(Path(__file__).parent / "_test_build_temp" / "libtermux_bitnet.so")
+
+        # Verify that CMakeBuild.build_extension raises RuntimeError unconditionally
+        with self.assertRaises(RuntimeError) as cm:
+            builder.build_extension(cmake_ext)
+        self.assertIn("[termux-bitnet] Native build failed", str(cm.exception))
+
 
 if __name__ == "__main__":
     unittest.main()
