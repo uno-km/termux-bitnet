@@ -337,22 +337,43 @@ class BitNetEngine:
                 try:
                     proc.kill()
                     proc.wait(timeout=2)
-                except Exception:
-                    pass
+                except OSError as _kill_err:
+                    import logging
+                    logging.getLogger("termux_bitnet").warning(
+                        "[termux-bitnet] Failed to kill inference process pid=%s: %s",
+                        getattr(proc, 'pid', 'unknown'), _kill_err,
+                    )
 
-            # Fail-fast if tokens were already yielded to prevent corrupted/duplicated outputs
+            # 토큰이 이미 yield된 경우 부분 결과 오염 방지를 위해 즉시 실패
             if has_yielded:
-                raise RuntimeError(f"[termux-bitnet] CLI inference stream failed mid-generation: {e}") from e
+                raise RuntimeError(
+                    f"[termux-bitnet] CLI inference stream failed mid-generation: {e}"
+                ) from e
 
-            # Fallback to C ABI only if nothing was yielded and C ABI is loaded
+            # C ABI fallback — 토큰 미방출 + _lib 로드된 경우에만 허용
             if self._lib:
                 import logging
-                logging.getLogger("termux_bitnet").warning(
-                    "[termux-bitnet] CLI execution failed before token generation (%s). Transitioning to C ABI.", e
+                _logger = logging.getLogger("termux_bitnet")
+                _primary_error = {"code": "CLI_INFERENCE_FAILED", "message": str(e)}
+                _logger.warning(
+                    "[termux-bitnet] CLI execution failed before token generation "
+                    "(primary_error=%s). Falling back to C ABI. "
+                    "fallback_used=True requested_backend=cli executed_backend=c_abi",
+                    e,
                 )
+                # fallback 결과에 메타데이터 주입 — Generator 이므로 첫 chunk 앞에 삽입 불가.
+                # 대신 self._last_fallback_meta에 기록하여 caller가 조회 가능하도록 한다.
+                self._last_fallback_meta = {
+                    "fallback_used": True,
+                    "requested_backend": "cli",
+                    "executed_backend": "c_abi",
+                    "primary_error": _primary_error,
+                }
                 yield from self._generate_stream_native(prompt, max_tokens)
             else:
                 raise RuntimeError(f"[termux-bitnet] CLI inference failed: {e}") from e
+
+
 
     def _generate_stream_native(self, prompt: str, max_tokens: int) -> Generator[str, None, None]:
         """Execute inference stream via in-process C ABI shared library."""

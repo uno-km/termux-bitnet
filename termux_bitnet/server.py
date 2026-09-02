@@ -234,8 +234,14 @@ class OpenAIHandler(BaseHTTPRequestHandler):
                         err_chunk = {"error": {"message": str(e), "type": "internal_error", "code": 500}}
                         self.wfile.write(f"data: {json.dumps(err_chunk)}\n\n".encode("utf-8"))
                         self.wfile.flush()
-                    except Exception:
-                        pass
+                    except (BrokenPipeError, ConnectionResetError, OSError) as _flush_err:
+                        # 클라이언트가 이미 연결 해제 — 오류 chunk 전송 불가.
+                        # 메인 오류(e)는 이미 로깅된 상태이므로 연결 실패만 debug 기록.
+                        import logging
+                        logging.getLogger("termux_bitnet.server").debug(
+                            "[server] Cannot flush error chunk to client (disconnected): %s", _flush_err
+                        )
+
         else:
             try:
                 with ENGINE_LOCK:

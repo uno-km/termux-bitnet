@@ -94,14 +94,41 @@ class BitNetControl(ComponentControl):
                            "updated_at": state_data.get("updated_at") if state_data else None},
         }
 
-    def _check_pid(self) -> tuple[int | None, bool]:
+    def _check_pid(self) -> tuple[int | None, bool | None]:
+        """PID 파일 또는 상태 파일에서 엔진 프로세스 생존 여부 확인.
+
+        반환:
+            (pid, alive)
+            alive=True  → 프로세스 확인됨
+            alive=False → PID 알고 있으나 종료됨
+            alive=None  → PermissionError 등으로 측정 불가
+        """
+        from ameva_component import log_stderr
+
         pid_file = Path.home() / ".local" / "run" / "termux-bitnet.pid"
         if pid_file.exists():
             try:
                 pid = int(pid_file.read_text().strip())
-                os.kill(pid, 0)
-                return pid, True
-            except Exception: pass
+            except (ValueError, OSError) as _parse_err:
+                log_stderr(f"[bitnet] PID file parse error: {_parse_err}")
+                pid = None
+
+            if pid is not None:
+                try:
+                    os.kill(pid, 0)
+                    return pid, True
+                except ProcessLookupError:
+                    # 프로세스가 이미 종료됨 — PID는 알고 있음
+                    return pid, False
+                except PermissionError:
+                    # 권한 없음 — 생사 불명확 (None = 측정 불가)
+                    log_stderr(f"[bitnet] PID {pid} alive check: PermissionError (unmeasurable)")
+                    return pid, None
+                except OSError as _os_err:
+                    log_stderr(f"[bitnet] PID {pid} alive check OSError: {_os_err}")
+                    return pid, None
+
+        # PID 파일 없으면 상태 파일 fallback
         state_data = self._state_file.read()
         if state_data:
             pid = state_data.get("process", {}).get("pid")
@@ -109,8 +136,14 @@ class BitNetControl(ComponentControl):
                 try:
                     os.kill(pid, 0)
                     return pid, True
-                except Exception:
+                except ProcessLookupError:
                     return pid, False
+                except PermissionError:
+                    log_stderr(f"[bitnet] State-file PID {pid}: PermissionError (unmeasurable)")
+                    return pid, None
+                except OSError as _os_err:
+                    log_stderr(f"[bitnet] State-file PID {pid} OSError: {_os_err}")
+                    return pid, None
         return None, False
 
     def _check_hardware(self) -> dict:
@@ -127,7 +160,7 @@ class BitNetControl(ComponentControl):
             from termux_bitnet.engine import BitNetEngine
             return True
         except ImportError:
-            return False
+            return False  # Allowed: engine not installed -> binary check fails-closed.
 
     def doctor_full(self) -> dict:
         lite = self.doctor_lite()
@@ -252,11 +285,22 @@ class BitNetControl(ComponentControl):
     def _write_state(self, *, ready: bool | None = None, last_error: str | None = None) -> None:
         ts = now_timestamps()
         hot = [i for i in self._inst_reg.list_all() if i.state == InstanceState.HOT]
-        _, pid_alive = self._check_pid()
-        _ready = self._check_engine_binary() if ready is None else ready
+        pid, pid_alive = self._check_pid()
+        # pid_alive=None → PermissionError 등 측정 불가 → degraded 처리
+        if ready is None:
+            _ready = self._check_engine_binary() and pid_alive is not False
+        else:
+            _ready = ready
+        _degraded = not _ready or pid_alive is None
         self._state_file.write({
             "protocol": "ameva-component-status/1", "component_id": self.COMPONENT_ID,
             "component_type": self.COMPONENT_TYPE, "version": self._get_version(),
-            "ready": _ready, "degraded": not _ready, **ts,
+            "ready": _ready, "degraded": _degraded, **ts,
+            "process": {
+                "pid": pid,
+                "alive": pid_alive,  # True/False/None(측정불가)
+            },
             "active_models": [i.model_id for i in hot], "last_error": last_error,
         })
+
+
