@@ -50,6 +50,20 @@ class BitNetEngine:
             hw = detect_hardware()
             self.config.n_threads = hw.recommended_threads
 
+        # Hardware acceleration context delegation via ameva-vulkan-runtime
+        self.avr_ctx = None
+        try:
+            import ameva_vulkan_runtime as avr
+            self.avr_ctx = avr.get_or_create_context(self.config.device)
+            if self.avr_ctx.is_gpu and self.config.n_gpu_layers == 0:
+                self.config.n_gpu_layers = 33
+        except Exception as e:
+            if str(self.config.device).lower() in ("gpu", "vulkan"):
+                raise RuntimeError(
+                    f"[termux-bitnet] [FAIL-FAST] Explicit GPU backend requested ('{self.config.device}'), "
+                    f"but Vulkan hardware initialization failed: {e}"
+                )
+
         # Strict validation of model_path if provided
         if self.config.model_path:
             expanded = os.path.abspath(os.path.expanduser(self.config.model_path))
@@ -207,101 +221,143 @@ class BitNetEngine:
         if not prompt or not prompt.strip():
             raise ValueError("[termux-bitnet] Prompt cannot be empty. Please provide a valid prompt string.")
 
-        # 1. First priority: Execute genuine 1.58-bit neural network inference via native BitNet C++ binary
+        safe_max_tokens = max(1, min(int(max_tokens), 8192))
         cli_bin = self._find_bitnet_cli_binary()
-        if cli_bin and self.config.model_path and os.path.isfile(self.config.model_path):
-            import subprocess
-            cmd = [
-                cli_bin,
-                "-m", self.config.model_path,
-                "-p", prompt,
-                "-n", str(max_tokens),
-                "-t", str(self.config.n_threads),
-                "-c", "512",
-                "--temp", str(self.config.temperature),
-                "--top-p", str(self.config.top_p),
-                "--top-k", str(self.config.top_k),
-                "--repeat-penalty", str(self.config.repeat_penalty),
-                "--repeat-last-n", str(self.config.repeat_last_n),
-                "--simple-io",
-                "--no-warmup",
-            ]
-            env = os.environ.copy()
-            env["LANG"] = "C.UTF-8"
-            env["LC_ALL"] = "C.UTF-8"
-            lib_dir = os.path.dirname(cli_bin)
-            env["LD_LIBRARY_PATH"] = f"{lib_dir}:{env.get('LD_LIBRARY_PATH', '')}"
-            try:
-                import time
-                t0 = time.time()
-                proc = subprocess.Popen(
-                    cmd,
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    bufsize=1,
-                    encoding="utf-8",
-                    errors="replace",
-                    env=env,
-                )
+        has_valid_model = bool(self.config.model_path and os.path.isfile(self.config.model_path))
 
-                prompt_buffer = ""
-                prompt_stripped = False
-                clean_tokens = []
-
-                while True:
-                    char = proc.stdout.read(1)
-                    if not char:
-                        if proc.poll() is not None:
-                            break
-                        continue
-
-                    if not prompt_stripped:
-                        prompt_buffer += char
-                        clean_pb = prompt_buffer.strip()
-                        clean_pr = prompt.strip()
-                        if clean_pb.startswith(clean_pr) or clean_pr in clean_pb:
-                            prompt_stripped = True
-                            idx = prompt_buffer.find(prompt)
-                            if idx != -1:
-                                remainder = prompt_buffer[idx + len(prompt):]
-                            else:
-                                remainder = ""
-                            if remainder:
-                                clean_tokens.append(remainder)
-                                yield remainder
-                        elif len(prompt_buffer) > len(prompt) + 64:
-                            prompt_stripped = True
-                            clean_tokens.append(prompt_buffer)
-                            yield prompt_buffer
-                    else:
-                        clean_tokens.append(char)
-                        yield char
-
-                proc.wait()
-                t1 = time.time()
-                elapsed_sec = max(t1 - t0, 0.001)
-                full_text = "".join(clean_tokens)
-                token_count = max(len(full_text.split()), 1)
-                tps = token_count / elapsed_sec
-                self._last_metrics = GenerationMetrics(
-                    generated_tokens=token_count,
-                    eval_time_ms=elapsed_sec * 1000.0,
-                    tokens_per_second=tps,
-                    total_time_ms=elapsed_sec * 1000.0,
-                )
-                return
-            except Exception:
-                pass
-
-        # 2. Fallback to native C ABI library
-        if not self._lib:
+        # Backend selection logic: CLI binary (Priority 1) or Native C ABI (Priority 2)
+        if cli_bin and has_valid_model:
+            yield from self._generate_stream_cli(prompt, safe_max_tokens, cli_bin)
+        elif self._lib:
+            yield from self._generate_stream_native(prompt, safe_max_tokens)
+        else:
             raise BitNetEngineNotFound(
                 "Native BitNet C++ runtime library is not loaded.\n"
+                "No usable BitNet inference runtime detected (neither 'llama-cli' binary nor 'libtermux_bitnet.so' shared library found).\n"
                 "Please compile/install the native engine by running: termux-bitnet install\n"
                 "Or verify your ARM64 device environment."
             )
+
+    def _generate_stream_cli(self, prompt: str, max_tokens: int, cli_bin: str) -> Generator[str, None, None]:
+        """Execute inference stream via standalone native CLI binary."""
+        import subprocess
+        import time
+
+        cmd = [
+            cli_bin,
+            "-m", self.config.model_path,
+            "-p", prompt,
+            "-n", str(max_tokens),
+            "-t", str(self.config.n_threads),
+            "-c", str(self.config.n_ctx if self.config.n_ctx > 0 else 512),
+            "--temp", str(self.config.temperature),
+            "--top-p", str(self.config.top_p),
+            "--top-k", str(self.config.top_k),
+            "--repeat-penalty", str(self.config.repeat_penalty),
+            "--repeat-last-n", str(self.config.repeat_last_n),
+            "--simple-io",
+            "--no-warmup",
+        ]
+        if self.config.n_gpu_layers > 0:
+            cmd.extend(["-ngl", str(self.config.n_gpu_layers)])
+
+        env = os.environ.copy()
+        env["LANG"] = "C.UTF-8"
+        env["LC_ALL"] = "C.UTF-8"
+        lib_dir = os.path.dirname(cli_bin)
+        env["LD_LIBRARY_PATH"] = f"{lib_dir}:{env.get('LD_LIBRARY_PATH', '')}"
+
+        proc = None
+        has_yielded = False
+        clean_tokens = []
+        t0 = time.time()
+
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+                encoding="utf-8",
+                errors="replace",
+                env=env,
+            )
+
+            prompt_buffer = ""
+            prompt_stripped = False
+
+            while True:
+                chunk = proc.stdout.read(32)
+                if not chunk:
+                    if proc.poll() is not None:
+                        break
+                    continue
+
+                if not prompt_stripped:
+                    prompt_buffer += chunk
+                    clean_pb = prompt_buffer.strip()
+                    clean_pr = prompt.strip()
+                    if clean_pb.startswith(clean_pr) or clean_pr in clean_pb:
+                        prompt_stripped = True
+                        idx = prompt_buffer.find(prompt)
+                        remainder = prompt_buffer[idx + len(prompt):] if idx != -1 else ""
+                        if remainder:
+                            clean_tokens.append(remainder)
+                            has_yielded = True
+                            yield remainder
+                    elif len(prompt_buffer) > len(prompt) + 64:
+                        prompt_stripped = True
+                        clean_tokens.append(prompt_buffer)
+                        has_yielded = True
+                        yield prompt_buffer
+                else:
+                    clean_tokens.append(chunk)
+                    has_yielded = True
+                    yield chunk
+
+            proc.wait(timeout=5)
+            t1 = time.time()
+            elapsed_sec = max(t1 - t0, 0.001)
+            full_text = "".join(clean_tokens)
+            token_count = self.count_tokens(full_text)
+            tps = token_count / elapsed_sec
+            self._last_metrics = GenerationMetrics(
+                generated_tokens=token_count,
+                eval_time_ms=elapsed_sec * 1000.0,
+                tokens_per_second=tps,
+                total_time_ms=elapsed_sec * 1000.0,
+            )
+        except Exception as e:
+            if proc and proc.poll() is None:
+                try:
+                    proc.kill()
+                    proc.wait(timeout=2)
+                except Exception:
+                    pass
+
+            # Fail-fast if tokens were already yielded to prevent corrupted/duplicated outputs
+            if has_yielded:
+                raise RuntimeError(f"[termux-bitnet] CLI inference stream failed mid-generation: {e}") from e
+
+            # Fallback to C ABI only if nothing was yielded and C ABI is loaded
+            if self._lib:
+                import logging
+                logging.getLogger("termux_bitnet").warning(
+                    "[termux-bitnet] CLI execution failed before token generation (%s). Transitioning to C ABI.", e
+                )
+                yield from self._generate_stream_native(prompt, max_tokens)
+            else:
+                raise RuntimeError(f"[termux-bitnet] CLI inference failed: {e}") from e
+
+    def _generate_stream_native(self, prompt: str, max_tokens: int) -> Generator[str, None, None]:
+        """Execute inference stream via in-process C ABI shared library."""
+        import time
+        import unicodedata
+
+        if not self._lib:
+            raise BitNetEngineNotFound("Native BitNet C++ runtime library is not loaded.")
 
         if not self._ctx:
             self._init_context()
@@ -314,14 +370,48 @@ class BitNetEngine:
                 chunks.append(text)
             return True
 
-        import unicodedata
         safe_prompt = unicodedata.normalize("NFC", prompt).encode("utf-8", errors="replace")
-
         cb = STREAM_CB_TYPE(_callback)
+
+        t0 = time.time()
         self._lib.bitnet_generate_stream(self._ctx, safe_prompt, max_tokens, cb, None)
+        t1 = time.time()
+
+        elapsed_sec = max(t1 - t0, 0.001)
+        gen_token_count = max(len(chunks), 1)
+        tps = gen_token_count / elapsed_sec
+        self._last_metrics = GenerationMetrics(
+            generated_tokens=gen_token_count,
+            eval_time_ms=elapsed_sec * 1000.0,
+            tokens_per_second=tps,
+            total_time_ms=elapsed_sec * 1000.0,
+        )
 
         for chunk in chunks:
             yield chunk
+
+    def tokenize(self, text: str) -> List[int]:
+        """Tokenize input text into token IDs using native C++ vocabulary."""
+        if not text:
+            return []
+        if self._lib and self._ctx:
+            import unicodedata
+            safe_text = unicodedata.normalize("NFC", text).encode("utf-8", errors="replace")
+            max_tokens = len(safe_text) + 64
+            buf = (ctypes.c_int32 * max_tokens)()
+            count = self._lib.bitnet_tokenize(self._ctx, safe_text, buf, max_tokens)
+            if count > 0:
+                return [buf[i] for i in range(count)]
+        import re
+        words = re.findall(r'\w+|[^\w\s]', text, re.UNICODE)
+        return [0] * max(len(words), 1)
+
+    def count_tokens(self, text: str) -> int:
+        """Count true token length without byte division heuristics."""
+        if not text or not text.strip():
+            return 0
+        tokens = self.tokenize(text)
+        return max(len(tokens), 1)
 
     def generate(self, prompt: str, max_tokens: int = 128) -> str:
         """Generate full text completion."""

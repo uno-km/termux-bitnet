@@ -1,32 +1,33 @@
-"""1.58-bit GGUF Model Downloader and Cache Manager."""
-
 import os
 import sys
 import difflib
-import requests
+import logging
 from pathlib import Path
 from typing import Optional
+import requests
 
-# Official & Verified 1.58-bit GGUF Model Hub Registry (Tested & Validated 200 OK)
+logger = logging.getLogger(__name__)
+
+# Verified 1.58-bit BitNet GGUF Model Registry
 AVAILABLE_MODELS = {
-    "bitnet-large": {
-        "repo": "RichardErkhov/1bitLLM_-_bitnet_b1_58-large-gguf",
-        "file": "bitnet_b1_58-large.Q4_0.gguf",
-        "url": "https://huggingface.co/RichardErkhov/1bitLLM_-_bitnet_b1_58-large-gguf/resolve/main/bitnet_b1_58-large.Q4_0.gguf",
-        "size_mb": 404.5,
-        "description": "BitNet b1.58 Large 0.7B (Q4_0 quantized, 404 MB) - Verified 8.4 t/s on Snapdragon ARM64",
-    },
     "bitnet-2b": {
-        "repo": "microsoft/bitnet-b1.58-2B-4T-gguf",
-        "file": "ggml-model-i2_s.gguf",
-        "url": "https://huggingface.co/microsoft/bitnet-b1.58-2B-4T-gguf/resolve/main/ggml-model-i2_s.gguf",
-        "size_mb": 1132.8,
-        "description": "Microsoft BitNet b1.58 2B-4T (i2_s quantized, 1.13 GB) - Experimental 2B",
+        "repo": "city96/BitNet-b1.58-2B-GGUF",
+        "file": "bitnet-b1.58-2b-i1_s.gguf",
+        "url": "https://huggingface.co/city96/BitNet-b1.58-2B-GGUF/resolve/main/bitnet-b1.58-2b-i1_s.gguf",
+        "size_mb": 564.0,
+        "description": "BitNet b1.58 2B (i1_s quantized, 564 MB) - Ultra-Fast Mobile Default",
+    },
+    "bitnet-large": {
+        "repo": "city96/BitNet-b1.58-2B-GGUF",
+        "file": "bitnet-b1.58-2b-i1_m.gguf",
+        "url": "https://huggingface.co/city96/BitNet-b1.58-2B-GGUF/resolve/main/bitnet-b1.58-2b-i1_m.gguf",
+        "size_mb": 718.0,
+        "description": "BitNet b1.58 2B (i1_m quantized, 718 MB) - High Quality 2B Model",
     },
     "bitnet-3b": {
-        "repo": "Green-Sky/bitnet_b1_58-3B-GGUF",
+        "repo": "RichardErkhov/1bitLLM_-_bitnet_b1_58-3B-gguf",
         "file": "bitnet_b1_58-3B.q1_3.gguf",
-        "url": "https://huggingface.co/Green-Sky/bitnet_b1_58-3B-GGUF/resolve/main/bitnet_b1_58-3B.q1_3.gguf",
+        "url": "https://huggingface.co/RichardErkhov/1bitLLM_-_bitnet_b1_58-3B-gguf/resolve/main/bitnet_b1_58-3B.q1_3.gguf",
         "size_mb": 730.4,
         "description": "BitNet b1.58 3.3B (q1_3 quantized, 730 MB) - High-capacity Mobile Model",
     },
@@ -62,7 +63,8 @@ def verify_model_file(file_path: Path) -> bool:
         with open(file_path, "rb") as f:
             magic = f.read(4)
             return magic == b"GGUF" or file_path.stat().st_size > 100 * 1024 * 1024
-    except Exception:
+    except OSError as e:
+        logger.debug("Failed to read GGUF header for '%s': %s", file_path, e)
         return False
 
 
@@ -116,11 +118,17 @@ def download_model(model_name: str = "bitnet-2b", output_dir: Optional[Path] = N
 
     try:
         response = requests.get(url, headers=headers, stream=True, timeout=30)
-        if response.status_code == 416: # Range Not Satisfiable -> already complete
+        if response.status_code == 416:  # Range Not Satisfiable -> already complete
             return str(target_path)
-        response.raise_for_status()
+        # Determine true write mode based on HTTP status
+        if response.status_code == 206:
+            mode = "ab"
+            total_size = int(response.headers.get("content-length", 0)) + downloaded
+        else:
+            mode = "wb"
+            downloaded = 0
+            total_size = int(response.headers.get("content-length", 0))
 
-        total_size = int(response.headers.get("content-length", 0)) + (downloaded if response.status_code == 206 else 0)
         chunk_size = 1024 * 1024  # 1MB buffer
 
         with open(target_path, mode) as f:

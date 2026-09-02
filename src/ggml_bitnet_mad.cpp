@@ -144,10 +144,11 @@ void ggml_vec_dot_i2_i8_s_1x1(int n, float * s, size_t bs, const void * vx, size
                 uint8x16_t xb = vld1q_u8(px + k);
 
                 // MSB -> LSB 2-bit Unpacking (Identical to AVX2 logic)
-                int8x16_t v0 = vreinterpretq_s8_u8(vandq_u8(vshrq_n_u8(xb, 6), mask));
-                int8x16_t v1 = vreinterpretq_s8_u8(vandq_u8(vshrq_n_u8(xb, 4), mask));
-                int8x16_t v2 = vreinterpretq_s8_u8(vandq_u8(vshrq_n_u8(xb, 2), mask));
-                int8x16_t v3 = vreinterpretq_s8_u8(vandq_u8(xb, mask));
+                int8x16_t ones = vdupq_n_s8(1);
+                int8x16_t v0 = vsubq_s8(vreinterpretq_s8_u8(vandq_u8(vshrq_n_u8(xb, 6), mask)), ones);
+                int8x16_t v1 = vsubq_s8(vreinterpretq_s8_u8(vandq_u8(vshrq_n_u8(xb, 4), mask)), ones);
+                int8x16_t v2 = vsubq_s8(vreinterpretq_s8_u8(vandq_u8(vshrq_n_u8(xb, 2), mask)), ones);
+                int8x16_t v3 = vsubq_s8(vreinterpretq_s8_u8(vandq_u8(xb, mask)), ones);
 
                 // 32-stride Interleaved Load
                 int8x16_t y0 = vld1q_s8(py + k +  0*32);

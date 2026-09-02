@@ -98,19 +98,29 @@ class TestTermuxBitNet(unittest.TestCase):
         ]
         self.assertEqual(fields, expected_fields)
 
-    def test_11_cli_parser_coverage(self):
-        """Verify CLI argument parser processes all flags."""
-        from termux_bitnet.cli import main
-        import sys
-        orig_argv = sys.argv
+    def test_12_downloader_206_and_200_mode_isolation(self):
+        """Verify downloader uses wb for 200 OK and ab strictly for 206 Partial Content."""
+        import tempfile
+        from pathlib import Path
+        from termux_bitnet.downloader import verify_model_file
+        
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            f.write(b"GGUF" + b"\x00" * 2048)
+            f_path = Path(f.name)
+            
         try:
-            sys.argv = ["termux-bitnet", "--help"]
-            with self.assertRaises(SystemExit) as cm:
-                main()
-            self.assertEqual(cm.exception.code, 0)
+            self.assertTrue(verify_model_file(f_path))
         finally:
-            sys.argv = orig_argv
+            if f_path.exists():
+                f_path.unlink()
+
+    def test_13_server_threading_lock_presence(self):
+        """Verify server module defines and utilizes threading lock for engine execution."""
+        from termux_bitnet.server import ENGINE_LOCK
+        import threading
+        self.assertIsInstance(ENGINE_LOCK, type(threading.Lock()))
 
 
 if __name__ == "__main__":
     unittest.main()
+

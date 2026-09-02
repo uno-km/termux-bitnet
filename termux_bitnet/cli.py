@@ -85,6 +85,7 @@ def cmd_run(args):
         model_path=resolved_model,
         system_prompt=args.system_prompt or "",
         stop_tokens=args.stop or "",
+        device=getattr(args, "device", "auto"),
         n_threads=args.threads,
         n_ctx=args.ctx_size,
         n_batch=args.batch_size,
@@ -242,6 +243,7 @@ def main():
     p_run.add_argument("-m", "--model", default=None, help="Path to GGUF model binary (default: auto-discover cached model)")
     p_run.add_argument("-p", "--prompt", default=None, help="Input prompt text")
     p_run.add_argument("-f", "--file", help="Path to prompt text file")
+    p_run.add_argument("-d", "--device", default="auto", choices=["auto", "gpu", "vulkan", "cpu"], help="Hardware acceleration backend (default: auto)")
     p_run.add_argument("-t", "--threads", type=int, default=8, help="Worker threads (default: 8)")
     p_run.add_argument("-c", "--ctx-size", type=int, default=2048, help="Context size (default: 2048)")
     p_run.add_argument("-b", "--batch-size", type=int, default=512, help="Batch size (default: 512)")
@@ -267,6 +269,7 @@ def main():
     # chat
     p_chat = subparsers.add_parser("chat", help="Start interactive chat REPL")
     p_chat.add_argument("-m", "--model", default=None, help="Path to GGUF model binary (default: auto-discover cached model)")
+    p_chat.add_argument("-d", "--device", default="auto", choices=["auto", "gpu", "vulkan", "cpu"], help="Hardware acceleration backend")
     p_chat.add_argument("-t", "--threads", type=int, default=8, help="Worker threads (default: 8)")
     p_chat.add_argument("-c", "--ctx-size", type=int, default=2048, help="Context size")
     p_chat.add_argument("-n", "--n-predict", type=int, default=256, help="Max tokens per turn")

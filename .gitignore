@@ -97,3 +97,7 @@ temp/
 *.tmp
 .cache/
 .turbo/
+
+state.json
+*.tmp
+

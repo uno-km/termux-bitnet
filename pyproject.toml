@@ -23,6 +23,7 @@ classifiers = [
 ]
 dependencies = [
     "requests>=2.28.0",
+    "ameva-vulkan-runtime>=1.0.0",
 ]
 
 [project.scripts]

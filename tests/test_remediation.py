@@ -1,180 +1,206 @@
-import pytest
+import unittest
+import io
+import json
 import os
 import sys
+from unittest.mock import patch
+
 from termux_bitnet.engine import BitNetEngine, BitNetConfig
 from termux_bitnet.exceptions import BitNetEngineNotFound
-from termux_bitnet.cli import validate_model_path_or_exit, print_catalog_help
+from termux_bitnet.cli import validate_model_path_or_exit
+from termux_bitnet.downloader import download_model
+from termux_bitnet.server import OpenAIHandler
 
 
-def test_bitnet_native_missing_raises_exception():
-    """Verify that when native binary is absent, BitNetEngine raises BitNetEngineNotFound instead of returning fake text."""
-    cfg = BitNetConfig()
-    engine = BitNetEngine(cfg)
-    
-    if not engine._lib:
-        with pytest.raises(BitNetEngineNotFound) as exc_info:
-            engine.generate("Explain quantum computing")
-            
-        err_str = str(exc_info.value)
-        assert "not loaded" in err_str.lower() or "runtime" in err_str.lower()
+class TestTermuxBitNetRemediation(unittest.TestCase):
 
-
-def test_model_missing_raises_file_not_found():
-    """Verify that specifying a non-existent model path strictly raises FileNotFoundError."""
-    non_existent = "/non_existent_path/fake_model.gguf"
-    cfg = BitNetConfig(model_path=non_existent)
-    
-    with pytest.raises(FileNotFoundError) as exc_info:
-        BitNetEngine(cfg)
+    def test_bitnet_native_missing_raises_exception(self):
+        """Verify that when native binary/lib is absent and no model is specified, engine raises exception."""
+        cfg = BitNetConfig()
+        engine = BitNetEngine(cfg)
         
-    err = str(exc_info.value)
-    assert "Model file not found" in err
-    assert "termux-bitnet download" in err
-    assert "huggingface.co/1bitLLM" in err
+        if not engine._lib and not engine._find_bitnet_cli_binary():
+            with self.assertRaises(BitNetEngineNotFound) as ctx:
+                engine.generate("Explain quantum computing")
+            err_str = str(ctx.exception)
+            self.assertTrue("not loaded" in err_str.lower() or "runtime" in err_str.lower())
+
+    def test_model_missing_raises_file_not_found(self):
+        """Verify that specifying a non-existent model path strictly raises FileNotFoundError."""
+        non_existent = "/non_existent_path/fake_model.gguf"
+        cfg = BitNetConfig(model_path=non_existent)
+        
+        with self.assertRaises(FileNotFoundError) as ctx:
+            BitNetEngine(cfg)
+            
+        err = str(ctx.exception)
+        self.assertIn("Model file not found", err)
+        self.assertIn("termux-bitnet download", err)
+        self.assertIn("huggingface.co/1bitLLM", err)
+
+    def test_empty_prompt_raises_value_error(self):
+        """Verify that an empty or whitespace prompt strictly raises ValueError without fallback."""
+        cfg = BitNetConfig()
+        engine = BitNetEngine(cfg)
+        
+        with self.assertRaises(ValueError) as ctx:
+            engine.generate("   ")
+        self.assertIn("Prompt cannot be empty", str(ctx.exception))
+
+        with self.assertRaises(ValueError) as ctx:
+            engine.generate("")
+        self.assertIn("Prompt cannot be empty", str(ctx.exception))
+
+    def test_cli_model_validation_fails_fast(self):
+        """Verify validate_model_path_or_exit exits with code 10 and prints catalog when model is missing."""
+        stderr_capture = io.StringIO()
+        with patch("sys.stderr", stderr_capture):
+            with self.assertRaises(SystemExit) as ctx:
+                validate_model_path_or_exit("")
+            self.assertEqual(ctx.exception.code, 10)
+
+        with patch("sys.stderr", stderr_capture):
+            with self.assertRaises(SystemExit) as ctx:
+                validate_model_path_or_exit("/invalid/model/path.gguf")
+            self.assertEqual(ctx.exception.code, 10)
+
+        err_out = stderr_capture.getvalue()
+        self.assertIn("bitnet-2b", err_out)
+        self.assertIn("huggingface.co", err_out)
+
+    def test_download_model_typo_suggestion(self):
+        """Verify download_model detects typos and provides 'Did you mean' suggestions."""
+        # Typo: bitnet2b -> bitnet-2b
+        with self.assertRaises(ValueError) as ctx:
+            download_model("bitnet2b")
+        err = str(ctx.exception)
+        self.assertIn("typo detected", err.lower())
+        self.assertIn("bitnet-2b", err)
+        self.assertIn("Did you mean 'bitnet-2b'?", err)
+
+        # Typo: bitnet-lg -> bitnet-large
+        with self.assertRaises(ValueError) as ctx:
+            download_model("bitnet-lg")
+        err = str(ctx.exception)
+        self.assertIn("typo detected", err.lower())
+        self.assertIn("bitnet-large", err)
+
+        # Empty model name
+        with self.assertRaises(ValueError) as ctx:
+            download_model("")
+        self.assertIn("cannot be empty", str(ctx.exception))
+
+    def test_download_model_completely_unknown(self):
+        """Verify completely unknown model name lists all available verified models."""
+        with self.assertRaises(ValueError) as ctx:
+            download_model("completely_nonexistent_xyz_123")
+        err = str(ctx.exception)
+        self.assertIn("Unknown model", err)
+        self.assertIn("Available verified models", err)
+        self.assertIn("bitnet-2b", err)
+        self.assertIn("bitnet-large", err)
+        self.assertIn("bitnet-3b", err)
+
+    def test_server_engine_uninitialized_returns_503(self):
+        """Verify server handler returns HTTP 503 and JSON error payload when engine is uninitialized."""
+        OpenAIHandler.engine = None
+
+        req_body = json.dumps({"messages": [{"role": "user", "content": "Hello"}]}).encode("utf-8")
+        
+        handler = OpenAIHandler.__new__(OpenAIHandler)
+        handler.rfile = io.BytesIO(req_body)
+        handler.wfile = io.BytesIO()
+        handler.headers = {"Content-Length": str(len(req_body))}
+        handler.path = "/v1/chat/completions"
+
+        responses = []
+        handler.send_response = lambda code: responses.append(code)
+        handler.send_header = lambda k, v: None
+        handler.end_headers = lambda: None
+
+        handler.do_POST()
+
+        output = handler.wfile.getvalue().decode("utf-8")
+        self.assertIn(503, responses)
+        self.assertIn("BitNet engine is not initialized", output)
+        self.assertIn("service_unavailable", output)
+
+    def test_server_empty_messages_returns_400(self):
+        """Verify server handler returns HTTP 400 when messages or prompt is empty."""
+        class MockEngine:
+            def generate(self, prompt, max_tokens=256):
+                return "mock response"
+
+        OpenAIHandler.engine = MockEngine()
+
+        req_body = json.dumps({"messages": []}).encode("utf-8")
+        handler = OpenAIHandler.__new__(OpenAIHandler)
+        handler.rfile = io.BytesIO(req_body)
+        handler.wfile = io.BytesIO()
+        handler.headers = {"Content-Length": str(len(req_body))}
+        handler.path = "/v1/chat/completions"
+
+        responses = []
+        handler.send_response = lambda code: responses.append(code)
+        handler.send_header = lambda k, v: None
+        handler.end_headers = lambda: None
+
+        handler.do_POST()
+
+        output = handler.wfile.getvalue().decode("utf-8")
+        self.assertIn(400, responses)
+        self.assertIn("required and must be a non-empty array", output)
+
+    def test_server_large_payload_rejected(self):
+        """Verify server handler rejects payloads exceeding size limit with HTTP 413."""
+        OpenAIHandler.engine = None
+        handler = OpenAIHandler.__new__(OpenAIHandler)
+        handler.rfile = io.BytesIO(b"")
+        handler.wfile = io.BytesIO()
+        handler.headers = {"Content-Length": str(20 * 1024 * 1024)} # 20MB
+        handler.path = "/v1/chat/completions"
+
+        responses = []
+        handler.send_response = lambda code: responses.append(code)
+        handler.send_header = lambda k, v: None
+        handler.end_headers = lambda: None
+
+        handler.do_POST()
+
+        output = handler.wfile.getvalue().decode("utf-8")
+        self.assertIn(413, responses)
+        self.assertIn("Payload Too Large", output)
+
+    def test_no_fake_arithmetic_in_native_core(self):
+        """Verify native C++ core contains zero fake arithmetic patterns (e.g. (i*17)%64 or (r+k)%3-1)."""
+        import os
+        from pathlib import Path
+        cpp_file = Path(__file__).parent.parent / "src" / "llama_bitnet_core.cpp"
+        if cpp_file.exists():
+            content = cpp_file.read_text(encoding="utf-8")
+            self.assertNotIn("(i * 17) % 64", content)
+            self.assertNotIn("(r + k) % 3", content)
+            self.assertIn("CreateFileMappingA", content) # Windows mmap
+            self.assertIn("mmap(", content)               # POSIX mmap
+
+    def test_korean_multibyte_token_counting_accuracy(self):
+        """Verify Korean/multibyte text token counting produces valid positive count without byte division heuristic."""
+        from termux_bitnet import BitNetEngine, BitNetConfig
+        
+        engine = BitNetEngine(BitNetConfig())
+        korean_text = "안녕하세요! termux-bitnet 1.58비트 고성능 온디바이스 엔진입니다."
+        count = engine.count_tokens(korean_text)
+        
+        # 68 bytes in UTF-8 -> Old flawed heuristic gave 68//4 = 17.
+        # Unicode word tokenizer or native tokenizer produces reasonable token count > 0
+        self.assertGreater(count, 0)
+        self.assertLessEqual(count, len(korean_text) * 2)
+        
+        tokens = engine.tokenize(korean_text)
+        self.assertIsInstance(tokens, list)
+        self.assertEqual(len(tokens), count)
 
 
-def test_empty_prompt_raises_value_error():
-    """Verify that an empty or whitespace prompt strictly raises ValueError without fallback."""
-    cfg = BitNetConfig()
-    engine = BitNetEngine(cfg)
-    
-    with pytest.raises(ValueError) as exc_info:
-        engine.generate("   ")
-    assert "Prompt cannot be empty" in str(exc_info.value)
-
-    with pytest.raises(ValueError) as exc_info:
-        engine.generate("")
-    assert "Prompt cannot be empty" in str(exc_info.value)
-
-
-def test_cli_model_validation_fails_fast(capsys):
-    """Verify validate_model_path_or_exit exits with code 10 and prints catalog when model is missing."""
-    with pytest.raises(SystemExit) as exc_info:
-        validate_model_path_or_exit("")
-    assert exc_info.value.code == 10
-
-    with pytest.raises(SystemExit) as exc_info:
-        validate_model_path_or_exit("/invalid/model/path.gguf")
-    assert exc_info.value.code == 10
-
-    captured = capsys.readouterr()
-    assert "bitnet-2b" in captured.err
-    assert "huggingface.co" in captured.err
-
-
-def test_download_model_typo_suggestion():
-    """Verify download_model detects typos and provides 'Did you mean' suggestions."""
-    from termux_bitnet.downloader import download_model
-
-    # Typo: bitnet2b -> bitnet-2b
-    with pytest.raises(ValueError) as exc_info:
-        download_model("bitnet2b")
-    err = str(exc_info.value)
-    assert "typo detected" in err.lower()
-    assert "bitnet-2b" in err
-    assert "Did you mean 'bitnet-2b'?" in err
-
-    # Typo: bitnet-lg -> bitnet-large
-    with pytest.raises(ValueError) as exc_info:
-        download_model("bitnet-lg")
-    err = str(exc_info.value)
-    assert "typo detected" in err.lower()
-    assert "bitnet-large" in err
-
-    # Empty model name
-    with pytest.raises(ValueError) as exc_info:
-        download_model("")
-    assert "cannot be empty" in str(exc_info.value)
-
-
-def test_download_model_completely_unknown():
-    """Verify completely unknown model name lists all available verified models."""
-    from termux_bitnet.downloader import download_model
-
-    with pytest.raises(ValueError) as exc_info:
-        download_model("completely_nonexistent_xyz_123")
-    err = str(exc_info.value)
-    assert "Unknown model" in err
-    assert "Available verified models" in err
-    assert "bitnet-2b" in err
-    assert "bitnet-large" in err
-    assert "bitnet-3b" in err
-
-
-def test_server_engine_uninitialized_returns_503(monkeypatch):
-    """Verify server handler returns HTTP 503 and JSON error payload when engine is uninitialized."""
-    import io
-    import json
-    from termux_bitnet.server import OpenAIHandler
-
-    class DummyServer:
-        pass
-
-    # Ensure engine is None
-    OpenAIHandler.engine = None
-
-    class MockRequest:
-        def __init__(self, body: bytes):
-            self._body = io.BytesIO(body)
-        def makefile(self, *args, **kwargs):
-            return self._body
-
-    req_body = json.dumps({"messages": [{"role": "user", "content": "Hello"}]}).encode("utf-8")
-    
-    # Instantiate handler with mock
-    handler = OpenAIHandler.__new__(OpenAIHandler)
-    handler.rfile = io.BytesIO(req_body)
-    handler.wfile = io.BytesIO()
-    handler.headers = {"Content-Length": str(len(req_body))}
-    handler.path = "/v1/chat/completions"
-
-    responses = []
-    def mock_send_response(code):
-        responses.append(code)
-    def mock_send_header(k, v):
-        pass
-    def mock_end_headers():
-        pass
-
-    handler.send_response = mock_send_response
-    handler.send_header = mock_send_header
-    handler.end_headers = mock_end_headers
-
-    handler.do_POST()
-
-    output = handler.wfile.getvalue().decode("utf-8")
-    assert 503 in responses
-    assert "BitNet engine is not initialized" in output
-    assert "service_unavailable" in output
-
-
-def test_server_empty_messages_returns_400():
-    """Verify server handler returns HTTP 400 when messages or prompt is empty."""
-    import io
-    import json
-    from termux_bitnet.server import OpenAIHandler
-
-    class MockEngine:
-        def generate(self, prompt, max_tokens=256):
-            return "mock response"
-
-    OpenAIHandler.engine = MockEngine()
-
-    req_body = json.dumps({"messages": []}).encode("utf-8")
-    handler = OpenAIHandler.__new__(OpenAIHandler)
-    handler.rfile = io.BytesIO(req_body)
-    handler.wfile = io.BytesIO()
-    handler.headers = {"Content-Length": str(len(req_body))}
-    handler.path = "/v1/chat/completions"
-
-    responses = []
-    handler.send_response = lambda code: responses.append(code)
-    handler.send_header = lambda k, v: None
-    handler.end_headers = lambda: None
-
-    handler.do_POST()
-
-    output = handler.wfile.getvalue().decode("utf-8")
-    assert 400 in responses
-    assert "required and must be a non-empty array" in output
+if __name__ == "__main__":
+    unittest.main()
 

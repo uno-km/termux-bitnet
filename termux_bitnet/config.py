@@ -10,6 +10,7 @@ class BitNetConfig:
     model_path: str = ""
     system_prompt: str = ""
     stop_tokens: str = ""
+    device: str = "auto"
     n_threads: int = 4
     n_ctx: int = 2048
     n_batch: int = 512
