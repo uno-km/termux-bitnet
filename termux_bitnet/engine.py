@@ -3,12 +3,15 @@
 import os
 import sys
 import ctypes
+import logging
 from typing import Generator, Optional, List, Tuple
 from pathlib import Path
 
 from termux_bitnet.config import BitNetConfig, GenerationMetrics
 from termux_bitnet.hardware import detect_hardware
 from termux_bitnet.exceptions import BitNetEngineNotFound, RuntimeNotFoundError
+
+logger = logging.getLogger(__name__)
 
 
 # C ABI Structures
@@ -408,8 +411,10 @@ class BitNetEngine:
                     count = self._lib.bitnet_tokenize(self._ctx, safe_text, buf, max_tokens)
                     if count > 0:
                         return [buf[i] for i in range(count)]
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(
+                    "[termux-bitnet] bitnet_tokenize C++ ABI 호출 실패, Unicode 폴백 사용: %s", exc
+                )
 
         # 2. Secondary: Standalone Unicode / BPE-aware subword tokenizer for Hangul & CJK
         import unicodedata
