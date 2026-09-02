@@ -294,12 +294,30 @@ def main():
     p_bench.add_argument("-t", "--threads", type=int, default=4, help="Worker threads")
     p_bench.set_defaults(func=cmd_benchmark)
 
+    # ── AMEVA Component Protocol v1 ─────────────────────────────────────────
+    try:
+        from ameva_component.cli_support import build_protocol_subcommands
+        build_protocol_subcommands(subparsers)
+        _protocol_available = True
+    except ImportError:
+        _protocol_available = False
+    # ────────────────────────────────────────────────────────────────────────
+
     args = parser.parse_args()
     if hasattr(args, "func"):
         args.func(args)
+    elif args.command in ("component", "model", "instance") and _protocol_available:
+        from ameva_component.cli_support import dispatch_protocol
+        from termux_bitnet.control import BitNetControl
+        dispatch_protocol(args, BitNetControl())
+    elif args.command in ("component", "model", "instance"):
+        import sys
+        print("[ERROR] ameva-component-sdk not installed.", file=sys.stderr)
+        sys.exit(1)
     else:
         parser.print_help()
 
 
 if __name__ == "__main__":
     main()
+
