@@ -30,8 +30,8 @@ class CMakeBuild(build_ext):
                         cmake_args.append("-DGGML_NEON=ON")
                     if "asimddp" in cpuinfo or "dotprod" in cpuinfo:
                         cmake_args.append("-DGGML_ARM_DOTPROD=ON")
-            except Exception:
-                pass
+            except OSError as cpu_err:
+                sys.stderr.write(f"[termux-bitnet] Notice: failed to read /proc/cpuinfo: {cpu_err}\n")
 
         build_args = ["--config", "Release", "--", "-j4"]
 

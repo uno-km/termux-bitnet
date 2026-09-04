@@ -5,14 +5,15 @@ Official AMEVA Library Documentation Site Generator for termux-bitnet.
 """
 import os
 import sys
+import io
 
 try:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8")
-except Exception:
-    pass
+except (AttributeError, io.UnsupportedOperation) as rec_err:
+    sys.stderr.write(f"[termux-bitnet] Notice: stream reconfigure not supported: {rec_err}\n")
 
 DOCS_DIR = os.path.dirname(os.path.abspath(__file__))
 SITE_URL = "https://uno-km.github.io/termux-bitnet"
