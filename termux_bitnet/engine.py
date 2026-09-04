@@ -268,7 +268,13 @@ class BitNetEngine:
         env["LANG"] = "C.UTF-8"
         env["LC_ALL"] = "C.UTF-8"
         lib_dir = os.path.dirname(cli_bin)
-        env["LD_LIBRARY_PATH"] = f"{lib_dir}:{env.get('LD_LIBRARY_PATH', '')}"
+        try:
+            from ameva_vulkan_runtime.adapters import get_vulkan_env
+            env = get_vulkan_env(env)
+            if lib_dir and lib_dir not in env["LD_LIBRARY_PATH"]:
+                env["LD_LIBRARY_PATH"] = f"{lib_dir}:{env['LD_LIBRARY_PATH']}"
+        except ImportError:
+            env["LD_LIBRARY_PATH"] = f"{lib_dir}:{env.get('LD_LIBRARY_PATH', '')}"
 
         proc = None
         has_yielded = False
