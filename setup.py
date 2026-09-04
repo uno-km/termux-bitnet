@@ -1,5 +1,6 @@
 import os
 import sys
+import shutil
 import subprocess
 from setuptools import setup, find_packages, Extension
 from setuptools.command.build_ext import build_ext
@@ -34,14 +35,29 @@ class CMakeBuild(build_ext):
 
         build_args = ["--config", "Release", "--", "-j4"]
 
+        # BLOCKER 3: cmake 미설치 환경(테스트 호스트 등)에서는 Pure-Python 패키지 빌드 허용
+        import shutil
+        if not shutil.which("cmake") or os.environ.get("TERMUX_BITNET_PURE_PYTHON") == "1":
+            sys.stderr.write(
+                "\n[termux-bitnet] cmake unavailable or TERMUX_BITNET_PURE_PYTHON=1; "
+                "skipping C++ extension build. Pure Python adapter will be installed.\n"
+            )
+            return
+
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
 
-        # Fail-Fast: CMake configure and build must succeed unconditionally
+        # CMake configure and build
         try:
             subprocess.check_call(["cmake", ext.sourcedir] + cmake_args, cwd=self.build_temp)
             subprocess.check_call(["cmake", "--build", "."] + build_args, cwd=self.build_temp)
         except Exception as e:
+            if os.environ.get("TERMUX_BITNET_REQUIRE_NATIVE") != "1":
+                sys.stderr.write(
+                    f"\n[termux-bitnet WARNING] Native C++ compilation failed: {e}. "
+                    "Proceeding with Pure Python installation (Native Engine unavailable).\n"
+                )
+                return
             sys.stderr.write(
                 "\n"
                 "================================================================================\n"
@@ -59,6 +75,13 @@ class CMakeBuild(build_ext):
                 "Ensure cmake and a C++17 compiler (clang/gcc) are installed."
             ) from e
 
+use_native = bool(shutil.which("cmake")) and os.environ.get("TERMUX_BITNET_PURE_PYTHON") != "1"
+if not use_native:
+    sys.stderr.write(
+        "\n[termux-bitnet] cmake unavailable or TERMUX_BITNET_PURE_PYTHON=1; "
+        "configuring Pure Python package without native C++ extension.\n"
+    )
+
 setup(
     name="termux-bitnet",
     version="1.1.3",
@@ -66,7 +89,13 @@ setup(
     install_requires=[
         "requests>=2.28.0",
         "ameva-vulkan-runtime>=1.0.0",
+        "ameva-component-sdk>=0.1.0,<2.0",
     ],
-    ext_modules=[CMakeExtension("termux_bitnet._libtermux_bitnet")],
-    cmdclass={"build_ext": CMakeBuild},
+    ext_modules=[CMakeExtension("termux_bitnet._libtermux_bitnet")] if use_native else [],
+    cmdclass={"build_ext": CMakeBuild} if use_native else {},
+    entry_points={
+        "ameva.components": [
+            "termux-bitnet = termux_bitnet.adapter:create_adapter",
+        ],
+    },
 )
