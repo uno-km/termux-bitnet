@@ -7,11 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.4] - 2026-09-05
+
+### Changed
+- Migrated hardware acceleration dependency to unified `ameva-runtime>=2.0.0` and `@ameva/runtime>=2.0.0`.
+- Enforced strict Fail-Fast compilation in CMake build extension (RuntimeError on missing toolchain or build failure).
+- Eradicated silent fallback and return paths in native C++ bindings.
+
+---
+
 ## [1.1.1] - 2026-09-02
 
 ### Added
 - **Unicode NFC Subword Tokenizer**: Replaced heuristic byte division with C FFI tokenization and Unicode NFC regex fallback.
-- **Fail-Fast Native Build**: Enforced aise RuntimeError on CMake build errors in setup.py.
+- **Fail-Fast Native Build**: Enforced 
+aise RuntimeError on CMake build errors in setup.py.
 
 ### Cleaned
 - Purged 20+ legacy wheel artifacts from repository tree.
