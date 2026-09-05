@@ -89,7 +89,7 @@ pkg install -y clang cmake git python python-pip openblas libandroid-execinfo no
 
 # 2. 파이썬 휠 도구체인 업그레이드
 pip install --upgrade setuptools wheel
-pip install ameva-vulkan-runtime || true
+pip install ameva-runtime || true
 
 # 3. 빌드 격리를 우회하여 네이티브 C++ 코어와 함께 설치
 pip install --no-build-isolation -e .
@@ -309,7 +309,7 @@ termux-bitnet run -m model.gguf -p "Explain BitNet"
    │
    ├─► [2. Engine Context Initialization]
    │     - BitNetConfig 생성
-   │     - ameva-vulkan-runtime 가속 컨텍스트 바인딩 확인
+   │     - ameva-runtime 가속 컨텍스트 바인딩 확인
    │     - libtermux_bitnet.so / llama-cli 프로세스 확인
    │
    ├─► [3. Prompt Evaluation]
