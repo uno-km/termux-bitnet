@@ -223,9 +223,12 @@ class OpenAIHandler(BaseHTTPRequestHandler):
                     self.wfile.flush()
                 finally:
                     cancel_event.set() # Stop producer thread and release ENGINE_LOCK deterministically
-            except (BrokenPipeError, ConnectionResetError):
+            except (BrokenPipeError, ConnectionResetError) as _client_disc:
                 # Client disconnected prematurely
-                pass
+                import logging
+                logging.getLogger("termux_bitnet.server").debug(
+                    "[server] Client disconnected during streaming: %s", _client_disc
+                )
             except Exception as e:
                 if not headers_sent:
                     self._send_json_error(500, f"[termux-bitnet ERROR] Inference execution failed: {e}", "internal_error")

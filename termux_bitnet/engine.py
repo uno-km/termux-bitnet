@@ -56,7 +56,7 @@ class BitNetEngine:
         # Hardware acceleration context delegation via ameva-vulkan-runtime
         self.avr_ctx = None
         try:
-            import ameva_vulkan_runtime as avr
+            from ameva_runtime import vulkan as avr
             self.avr_ctx = avr.get_or_create_context(self.config.device)
             if self.avr_ctx.is_gpu and self.config.n_gpu_layers == 0:
                 self.config.n_gpu_layers = 33
@@ -269,7 +269,7 @@ class BitNetEngine:
         env["LC_ALL"] = "C.UTF-8"
         lib_dir = os.path.dirname(cli_bin)
         try:
-            from ameva_vulkan_runtime.adapters import get_vulkan_env
+            from ameva_runtime.vulkan.adapters import get_vulkan_env
             env = get_vulkan_env(env)
             if lib_dir and lib_dir not in env["LD_LIBRARY_PATH"]:
                 env["LD_LIBRARY_PATH"] = f"{lib_dir}:{env['LD_LIBRARY_PATH']}"

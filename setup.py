@@ -35,14 +35,11 @@ class CMakeBuild(build_ext):
 
         build_args = ["--config", "Release", "--", "-j4"]
 
-        # BLOCKER 3: cmake 미설치 환경(테스트 호스트 등)에서는 Pure-Python 패키지 빌드 허용
-        import shutil
-        if not shutil.which("cmake") or os.environ.get("TERMUX_BITNET_PURE_PYTHON") == "1":
-            sys.stderr.write(
-                "\n[termux-bitnet] cmake unavailable or TERMUX_BITNET_PURE_PYTHON=1; "
-                "skipping C++ extension build. Pure Python adapter will be installed.\n"
+        if not shutil.which("cmake"):
+            raise RuntimeError(
+                "[termux-bitnet] Native build failed: cmake executable not found. "
+                "Ensure cmake and a C++17 compiler are installed."
             )
-            return
 
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
@@ -52,12 +49,6 @@ class CMakeBuild(build_ext):
             subprocess.check_call(["cmake", ext.sourcedir] + cmake_args, cwd=self.build_temp)
             subprocess.check_call(["cmake", "--build", "."] + build_args, cwd=self.build_temp)
         except Exception as e:
-            if os.environ.get("TERMUX_BITNET_REQUIRE_NATIVE") != "1":
-                sys.stderr.write(
-                    f"\n[termux-bitnet WARNING] Native C++ compilation failed: {e}. "
-                    "Proceeding with Pure Python installation (Native Engine unavailable).\n"
-                )
-                return
             sys.stderr.write(
                 "\n"
                 "================================================================================\n"
@@ -88,7 +79,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         "requests>=2.28.0",
-        "ameva-vulkan-runtime>=1.0.0",
+        "ameva-runtime>=2.0.0",
         "ameva-component-sdk>=0.1.0,<2.0",
     ],
     ext_modules=[CMakeExtension("termux_bitnet._libtermux_bitnet")] if use_native else [],

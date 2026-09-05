@@ -22,7 +22,7 @@ class HardwareProfile:
 
 # [B방안] Platform SSOT: ameva-vulkan-runtime.platform 에서 공유 구현을 가져옵니다.
 try:
-    from ameva_vulkan_runtime.platform import (
+    from ameva_runtime.vulkan.platform import (
         is_termux as _ameva_is_termux,
         is_proot as _ameva_is_proot,
     )
