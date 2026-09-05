@@ -1,6 +1,6 @@
 {
   "name": "termux-bitnet",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "1.58-bit (i2_s) BitNet on-device inference SDK utilizing device resources for Node.js on Android Termux & ARM64",
   "main": "index.js",
   "types": "index.d.ts",

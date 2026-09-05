@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.5] - 2026-09-05
+
+### Changed
+- Synchronized ameva-runtime unified acceleration bridge and updated installation toolchain.
+- Refined platform detection comments and hardware profile SSOT integration.
+
+---
+
 ## [1.1.4] - 2026-09-05
 
 ### Changed
