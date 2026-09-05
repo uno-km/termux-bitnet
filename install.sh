@@ -28,10 +28,10 @@ fi
 # 2. Python Toolchain Pre-provisioning (Avoid PyPI build isolation & cmake source build bottleneck)
 echo "[3/5] Pre-provisioning Python wheel and build toolchains..."
 pip install --upgrade setuptools wheel
-if pip install ameva-vulkan-runtime; then
-    echo "  [+] ameva-vulkan-runtime acceleration ready."
+if pip install ameva-runtime; then
+    echo "  [+] ameva-runtime acceleration ready."
 else
-    echo "  [-] ameva-vulkan-runtime optional acceleration skipped."
+    echo "  [-] ameva-runtime optional acceleration skipped."
 fi
 
 # 3. Python SDK & Native Core Fast Build (Bypass isolated build environment)

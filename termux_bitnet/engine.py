@@ -53,7 +53,7 @@ class BitNetEngine:
             hw = detect_hardware()
             self.config.n_threads = hw.recommended_threads
 
-        # Hardware acceleration context delegation via ameva-vulkan-runtime
+        # Hardware acceleration context delegation via ameva-runtime
         self.avr_ctx = None
         try:
             from ameva_runtime import vulkan as avr

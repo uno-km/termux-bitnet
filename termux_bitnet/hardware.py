@@ -20,7 +20,7 @@ class HardwareProfile:
     recommended_threads: int
 
 
-# [B방안] Platform SSOT: ameva-vulkan-runtime.platform 에서 공유 구현을 가져옵니다.
+# [B방안] Platform SSOT: ameva-runtime.platform 에서 공유 구현을 가져옵니다.
 try:
     from ameva_runtime.vulkan.platform import (
         is_termux as _ameva_is_termux,
@@ -48,7 +48,7 @@ def is_proot() -> bool:
 def detect_hardware() -> HardwareProfile:
     """Inspect local hardware environment and return optimal inference configuration.
 
-    [B방안] ameva-vulkan-runtime.platform 에서 플랫폼 감지를 통합 위임합니다.
+    [B방안] ameva-runtime.platform 에서 플랫폼 감지를 통합 위임합니다.
     """
     arch = platform.machine().lower()
     _is_termux_env = is_termux()
