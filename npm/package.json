@@ -25,6 +25,14 @@
   "dependencies": {
     "@ameva/runtime": ">=2.0.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/uno-km/termux-bitnet.git"
+  },
+  "bugs": {
+    "url": "https://github.com/uno-km/termux-bitnet/issues"
+  },
+  "homepage": "https://uno-km.vercel.app/lib/bitnet/",
   "engines": {
     "node": ">=16.0.0"
   }

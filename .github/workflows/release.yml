@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   publish-pypi:
@@ -98,10 +99,49 @@ jobs:
             echo "No package.json found. Skipping NPM publish."
           fi
 
+  publish-github-packages:
+    name: Publish to GitHub Packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@uno-km'
+
+      - name: Publish to GitHub Packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd npm
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.name = '@uno-km/termux-bitnet';
+            pkg.publishConfig = {
+              registry: 'https://npm.pkg.github.com'
+            };
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+          "
+          PKG_VER=$(node -p "require('./package.json').version")
+          if [ "$(npm view @uno-km/termux-bitnet@${PKG_VER} version --registry=https://npm.pkg.github.com 2>/dev/null)" = "${PKG_VER}" ]; then
+            echo "Version ${PKG_VER} already published to GitHub Packages. Skipping."
+          else
+            echo "Publishing @uno-km/termux-bitnet@${PKG_VER} to GitHub Packages..."
+            npm publish
+          fi
+
   create-release:
     name: Create GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [publish-pypi, publish-npm]
+    needs: [publish-pypi, publish-npm, publish-github-packages]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
