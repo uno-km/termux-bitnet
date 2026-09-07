@@ -47,12 +47,30 @@ set(BITNET_CORE_SOURCES
     src/c_api.cpp
 )
 
+# Vulkan GPU Compute Acceleration Option
+option(GGML_VULKAN "Enable native Vulkan GPU compute engine" ON)
+
+if(GGML_VULKAN)
+    add_definitions(-DGGML_USE_VULKAN=1)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/runtime_gpu/src)
+    find_library(VULKAN_LIB vulkan PATHS /data/data/com.termux/files/usr/lib /system/lib64 /vendor/lib64)
+    if(NOT VULKAN_LIB)
+        set(VULKAN_LIB "vulkan")
+    endif()
+    list(APPEND BITNET_CORE_SOURCES
+        runtime_gpu/src/core/vulkan_loader.cpp
+        runtime_gpu/src/core/vulkan_bitnet_engine.cpp
+        runtime_gpu/src/quirks/gpu_quirks.cpp
+    )
+    set(EXTRA_VULKAN_LIBS ${VULKAN_LIB})
+endif()
+
 # Shared Library for Python SDK & C/C++ Embedding
 add_library(termux_bitnet SHARED ${BITNET_CORE_SOURCES})
 target_include_directories(termux_bitnet PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 if(UNIX AND NOT APPLE)
-    target_link_libraries(termux_bitnet PRIVATE m pthread dl)
+    target_link_libraries(termux_bitnet PRIVATE m pthread dl ${EXTRA_VULKAN_LIBS})
 endif()
 
 # Native CLI Application

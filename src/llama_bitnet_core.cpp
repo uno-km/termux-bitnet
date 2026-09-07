@@ -31,6 +31,10 @@
 #include <immintrin.h>
 #endif
 
+#if defined(GGML_USE_VULKAN)
+#include "core/vulkan_bitnet_engine.h"
+#endif
+
 static void print_download_catalog_help(std::ostream& out) {
     out << "\n[Official BitNet Verified Model Catalog]\n"
         << "  1. bitnet-2b    : Microsoft BitNet 2B-4T (1.13 GB, i2_s)\n"
@@ -456,6 +460,38 @@ bitnet_context_t bitnet_init(const bitnet_params_t* params) {
     ctx->kv_cache.init(ctx->config.n_layers, ctx->config.n_ctx, ctx->config.n_kv_heads, ctx->config.head_dim);
     ctx->logits.assign(ctx->config.n_vocab, 0.0f);
     ctx->context_tokens.reserve(ctx->config.n_ctx);
+
+    // Initialize GPU Acceleration Engine (Fail-Fast: Never Silent Fallback)
+    ctx->n_gpu_layers = params->n_gpu_layers;
+#if defined(GGML_USE_VULKAN)
+    if (ctx->n_gpu_layers > 0) {
+        try {
+            auto* engine = new ameva::core::VulkanBitNetEngine();
+            engine->Initialize();
+            uint32_t max_dim = std::max(ctx->config.n_embd, ctx->config.n_ffn);
+            engine->AllocateBuffers(max_dim, max_dim);
+            ctx->vk_engine = engine;
+            std::cout << "[termux-bitnet] Vulkan GPU Engine activated: "
+                      << engine->GetDeviceInfo().device_name
+                      << " (" << ctx->n_gpu_layers << "/" << ctx->config.n_layers
+                      << " layers offloaded to GPU with Zero Silent Fallback)" << std::endl;
+        } catch (const std::exception& e) {
+            std::cerr << "[termux-bitnet FATAL FAIL-FAST] GPU offload requested (-ngl "
+                      << ctx->n_gpu_layers << "), but Vulkan initialization failed: "
+                      << e.what() << std::endl;
+            bitnet_free(ctx);
+            return nullptr;
+        }
+    }
+#else
+    if (ctx->n_gpu_layers > 0) {
+        std::cerr << "[termux-bitnet FATAL FAIL-FAST] -ngl " << ctx->n_gpu_layers
+                  << " requested, but binary was built without GGML_USE_VULKAN!" << std::endl;
+        bitnet_free(ctx);
+        return nullptr;
+    }
+#endif
+
     ctx->is_initialized = true;
 
     auto end_time = std::chrono::high_resolution_clock::now();
@@ -482,6 +518,14 @@ void bitnet_free(bitnet_context_t ctx) {
     if (ctx) {
         std::lock_guard<std::mutex> lock(ctx->ctx_mutex);
         ctx->is_initialized = false;
+
+#if defined(GGML_USE_VULKAN)
+        if (ctx->vk_engine) {
+            auto* engine = static_cast<ameva::core::VulkanBitNetEngine*>(ctx->vk_engine);
+            delete engine;
+            ctx->vk_engine = nullptr;
+        }
+#endif
 
         // Clean up mmap handles
 #if defined(_WIN32)
@@ -810,7 +854,30 @@ static void multi_head_attention(float* out, const float* q, const BitNetKVCache
 }
 
 static void forward_swiglu(float* out, const float* ffn_norm, const BitNetLayerWeights& lay, 
-                           const BitNetConfig& cfg) {
+                           const BitNetConfig& cfg, void* vk_engine, bool use_gpu) {
+#if defined(GGML_USE_VULKAN)
+    if (use_gpu && vk_engine) {
+        auto* engine = static_cast<ameva::core::VulkanBitNetEngine*>(vk_engine);
+        std::vector<float> gate(cfg.n_ffn);
+        std::vector<float> up(cfg.n_ffn);
+        engine->ComputeGemvDynamic(lay.w_gate, ffn_norm, gate.data(), cfg.n_ffn, cfg.n_embd, 1.0f);
+        engine->ComputeGemvDynamic(lay.w_up, ffn_norm, up.data(), cfg.n_ffn, cfg.n_embd, 1.0f);
+
+        for (uint32_t i = 0; i < cfg.n_ffn; ++i) {
+            float g = gate[i];
+            float silu = g / (1.0f + std::exp(-g));
+            gate[i] = silu * up[i];
+        }
+
+        if (lay.ffn_sub_norm) {
+            rms_norm(gate.data(), gate.data(), lay.ffn_sub_norm, lay.ffn_sub_norm_type, cfg.n_ffn, cfg.norm_eps);
+        }
+
+        engine->ComputeGemvDynamic(lay.w_down, gate.data(), out, cfg.n_embd, cfg.n_ffn, 1.0f);
+        return;
+    }
+#endif
+
     std::vector<int8_t> x_q8(cfg.n_embd);
     float dequant = quantize_activation_int8(x_q8.data(), ffn_norm, cfg.n_embd);
 
@@ -872,15 +939,25 @@ int32_t bitnet_eval(bitnet_context_t ctx, const int32_t* tokens, int32_t n_token
         // 2. Loop sequentially through all L Transformer Layers
         for (uint32_t l = 0; l < cfg.n_layers; ++l) {
             const auto& lay = ctx->layers[l];
+            bool use_gpu = (ctx->vk_engine != nullptr && (int32_t)l < ctx->n_gpu_layers);
 
             // 2.1 Attention RMSNorm
             rms_norm(x_norm.data(), x.data(), lay.attn_norm, lay.attn_norm_type, cfg.n_embd, cfg.norm_eps);
 
             // 2.2 Activation Quantization & Q, K, V GEMV (GQA aware)
-            float dequant = quantize_activation_int8(q8_buf.data(), x_norm.data(), cfg.n_embd);
-            bitnet_gemv(q.data(), lay.wq, lay.wq_type, q8_buf.data(), x_norm.data(), dequant, cfg.n_embd, q_dim);
-            bitnet_gemv(k.data(), lay.wk, lay.wk_type, q8_buf.data(), x_norm.data(), dequant, cfg.n_embd, kv_dim);
-            bitnet_gemv(v.data(), lay.wv, lay.wv_type, q8_buf.data(), x_norm.data(), dequant, cfg.n_embd, kv_dim);
+            if (use_gpu) {
+#if defined(GGML_USE_VULKAN)
+                auto* engine = static_cast<ameva::core::VulkanBitNetEngine*>(ctx->vk_engine);
+                engine->ComputeGemvDynamic(lay.wq, x_norm.data(), q.data(), q_dim, cfg.n_embd, 1.0f);
+                engine->ComputeGemvDynamic(lay.wk, x_norm.data(), k.data(), kv_dim, cfg.n_embd, 1.0f);
+                engine->ComputeGemvDynamic(lay.wv, x_norm.data(), v.data(), kv_dim, cfg.n_embd, 1.0f);
+#endif
+            } else {
+                float dequant = quantize_activation_int8(q8_buf.data(), x_norm.data(), cfg.n_embd);
+                bitnet_gemv(q.data(), lay.wq, lay.wq_type, q8_buf.data(), x_norm.data(), dequant, cfg.n_embd, q_dim);
+                bitnet_gemv(k.data(), lay.wk, lay.wk_type, q8_buf.data(), x_norm.data(), dequant, cfg.n_embd, kv_dim);
+                bitnet_gemv(v.data(), lay.wv, lay.wv_type, q8_buf.data(), x_norm.data(), dequant, cfg.n_embd, kv_dim);
+            }
 
             // 2.3 Rotary Position Embedding (RoPE)
             apply_rope(q.data(), pos, cfg.n_heads, cfg.head_dim, cfg.rope_theta);
@@ -896,13 +973,20 @@ int32_t bitnet_eval(bitnet_context_t ctx, const int32_t* tokens, int32_t n_token
             }
 
             // 2.6 Output Projection & Residual Connection
-            float attn_dequant = quantize_activation_int8(q8_buf.data(), attn_out.data(), cfg.n_embd);
-            bitnet_gemv(wo_out.data(), lay.wo, lay.wo_type, q8_buf.data(), attn_out.data(), attn_dequant, cfg.n_embd, cfg.n_embd);
+            if (use_gpu) {
+#if defined(GGML_USE_VULKAN)
+                auto* engine = static_cast<ameva::core::VulkanBitNetEngine*>(ctx->vk_engine);
+                engine->ComputeGemvDynamic(lay.wo, attn_out.data(), wo_out.data(), cfg.n_embd, cfg.n_embd, 1.0f);
+#endif
+            } else {
+                float attn_dequant = quantize_activation_int8(q8_buf.data(), attn_out.data(), cfg.n_embd);
+                bitnet_gemv(wo_out.data(), lay.wo, lay.wo_type, q8_buf.data(), attn_out.data(), attn_dequant, cfg.n_embd, cfg.n_embd);
+            }
             for (uint32_t i = 0; i < cfg.n_embd; ++i) x[i] += wo_out[i];
 
             // 2.7 FFN RMSNorm & SwiGLU FFN (with Sub-LayerNorm)
             rms_norm(x_norm.data(), x.data(), lay.ffn_norm, lay.ffn_norm_type, cfg.n_embd, cfg.norm_eps);
-            forward_swiglu(ffn_out.data(), x_norm.data(), lay, cfg);
+            forward_swiglu(ffn_out.data(), x_norm.data(), lay, cfg, ctx->vk_engine, use_gpu);
 
             // 2.8 Residual Connection
             for (uint32_t i = 0; i < cfg.n_embd; ++i) x[i] += ffn_out[i];

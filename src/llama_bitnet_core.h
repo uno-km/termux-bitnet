@@ -145,6 +145,10 @@ struct bitnet_context {
     std::mt19937 rng;
     std::mutex ctx_mutex;
     bool is_initialized = false;
+
+    // GPU Acceleration Engine
+    int32_t n_gpu_layers = 0;
+    void* vk_engine = nullptr; // Opaque pointer to ameva::core::VulkanBitNetEngine
 };
 
 // Forward declaration of kernel functions
