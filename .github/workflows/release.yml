@@ -43,7 +43,8 @@ jobs:
 
       - name: Build distributions
         if: steps.check-py.outputs.has_python == 'true'
-        run: python -m build
+        run: |
+          TERMUX_BITNET_PURE_PYTHON=1 python -m build
 
       - name: Verify distribution archives
         if: steps.check-py.outputs.has_python == 'true'
