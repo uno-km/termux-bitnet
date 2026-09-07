@@ -38,10 +38,12 @@ class BitNetConfig:
             cache_dir = Path.home() / ".cache" / "termux-bitnet" / "models"
             if cache_dir.exists():
                 for preferred in [
-                    "bitnet_b1_58-large.Q4_0.gguf",
-                    "bitnet-large-bitnet_b1_58-large.Q4_0.gguf",
-                    "bitnet-large.gguf",
                     "bitnet-2b-ggml-model-i2_s.gguf",
+                    "bitnet-b1.58-2b-i1_s.gguf",
+                    "bitnet-b1.58-2b-i1_m.gguf",
+                    "bitnet-large.gguf",
+                    "bitnet_b1_58-large.i2_s.gguf",
+                    "bitnet_b1_58-large.Q4_0.gguf",
                 ]:
                     p = cache_dir / preferred
                     if p.exists() and p.is_file():
@@ -49,6 +51,7 @@ class BitNetConfig:
                         return
                 ggufs = list(cache_dir.glob("*.gguf"))
                 if ggufs:
+                    ggufs.sort(key=lambda x: (0 if ("i2_s" in x.name or "i1_s" in x.name or "i1_m" in x.name) else 1, x.name))
                     self.model_path = str(ggufs[0])
 
 

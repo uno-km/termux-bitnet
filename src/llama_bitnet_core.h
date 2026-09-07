@@ -30,10 +30,15 @@ struct GGUFTensor {
 struct BitNetVocab {
     std::vector<std::string> id_to_token;
     std::unordered_map<std::string, int32_t> token_to_id;
+    int32_t byte_to_id[256];
     int32_t bos_id = 1;
     int32_t eos_id = 2;
     int32_t pad_id = 0;
     int32_t unk_id = 0;
+
+    BitNetVocab() {
+        for (int i = 0; i < 256; ++i) byte_to_id[i] = -1;
+    }
 };
 
 struct BitNetPerfMetrics {
@@ -45,6 +50,65 @@ struct BitNetPerfMetrics {
     double tokens_per_sec = 0.0;
 };
 
+// Architecture Hyperparameters extracted from GGUF
+struct BitNetConfig {
+    uint32_t n_vocab = 32000;
+    uint32_t n_ctx = 2048;
+    uint32_t n_embd = 2048;
+    uint32_t n_layers = 24;
+    uint32_t n_heads = 32;
+    uint32_t n_kv_heads = 32;
+    uint32_t head_dim = 64;   // n_embd / n_heads
+    uint32_t n_ffn = 5632;    // SwiGLU FFN hidden dimension
+    float norm_eps = 1e-5f;
+    float rope_theta = 10000.0f;
+};
+
+// Layer-wise weight references directly mapped to GGUF memory
+struct BitNetLayerWeights {
+    const float* attn_norm = nullptr;     // blk.N.attn_norm.weight (RMSNorm FP32/FP16)
+    uint32_t attn_norm_type = 0;
+    const void*  wq = nullptr;            // blk.N.attn_q.weight (i2_s / Q4_0 / etc)
+    uint32_t wq_type = 30;
+    const void*  wk = nullptr;            // blk.N.attn_k.weight
+    uint32_t wk_type = 30;
+    const void*  wv = nullptr;            // blk.N.attn_v.weight
+    uint32_t wv_type = 30;
+    const float* attn_sub_norm = nullptr; // blk.N.attn_sub_norm.weight (BitNet Sub-LayerNorm)
+    uint32_t attn_sub_norm_type = 0;
+    const void*  wo = nullptr;            // blk.N.attn_output.weight
+    uint32_t wo_type = 30;
+
+    const float* ffn_norm = nullptr;     // blk.N.ffn_norm.weight (RMSNorm FP32/FP16)
+    uint32_t ffn_norm_type = 0;
+    const void*  w_gate = nullptr;        // blk.N.ffn_gate.weight
+    uint32_t w_gate_type = 30;
+    const void*  w_up = nullptr;          // blk.N.ffn_up.weight
+    uint32_t w_up_type = 30;
+    const float* ffn_sub_norm = nullptr;  // blk.N.ffn_sub_norm.weight (BitNet Sub-LayerNorm)
+    uint32_t ffn_sub_norm_type = 0;
+    const void*  w_down = nullptr;        // blk.N.ffn_down.weight
+    uint32_t w_down_type = 30;
+};
+
+// In-Memory Dynamic KV Cache
+struct BitNetKVCache {
+    std::vector<float> k_cache; // [n_layers * n_ctx * n_kv_heads * head_dim]
+    std::vector<float> v_cache; // [n_layers * n_ctx * n_kv_heads * head_dim]
+    size_t current_pos = 0;
+
+    void init(uint32_t n_layers, uint32_t n_ctx, uint32_t n_kv_heads, uint32_t head_dim) {
+        size_t total_elements = (size_t)n_layers * n_ctx * n_kv_heads * head_dim;
+        k_cache.assign(total_elements, 0.0f);
+        v_cache.assign(total_elements, 0.0f);
+        current_pos = 0;
+    }
+
+    void reset() {
+        current_pos = 0;
+    }
+};
+
 struct bitnet_context {
     bitnet_params_t params;
     std::string model_path;
@@ -52,27 +116,32 @@ struct bitnet_context {
     std::vector<std::string> stop_words;
     BitNetVocab vocab;
     BitNetPerfMetrics metrics;
+    BitNetConfig config;
+    BitNetKVCache kv_cache;
+
     std::vector<int32_t> context_tokens;
-    size_t ring_head = 0;
     std::unordered_map<int32_t, int32_t> token_frequencies;
     std::vector<float> logits;
-    std::vector<float> hidden_state; // Hidden state activation vector
+
     std::vector<GGUFTensor> tensors;
     std::unordered_map<std::string, size_t> tensor_map;
+    std::vector<BitNetLayerWeights> layers;
+
+    // Primary global tensors
+    const void* embd_weight = nullptr;
+    uint32_t embd_type = 1; // F16 default
+    const float* output_norm = nullptr;
+    uint32_t output_norm_type = 0;
+    const void* output_weight = nullptr;
+    uint32_t output_weight_type = 36; // GGML_TYPE_I2_S default
     
     // Cross-Platform Memory Mapping (mmap / CreateFileMapping)
     void* mmap_addr = nullptr;
     size_t mmap_size = 0;
-    void* file_handle = nullptr; // Windows HANDLE or POSIX fd
-    void* map_handle = nullptr;  // Windows mapping handle
+    void* file_handle = nullptr;
+    void* map_handle = nullptr;
     
-    // Weight buffers
-    std::vector<uint8_t> model_weights_raw;
-    uint32_t n_embd = 2048;
-    uint32_t n_layer = 24;
-    uint32_t n_head = 16;
-    uint32_t n_vocab = 32000;
-    
+    std::vector<float> scratch_buf;
     std::mt19937 rng;
     std::mutex ctx_mutex;
     bool is_initialized = false;

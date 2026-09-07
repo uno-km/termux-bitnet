@@ -198,10 +198,10 @@ void ggml_vec_dot_i2_i8_s_1x1(int n, float * s, size_t bs, const void * vx, size
             for (int k = 0; k < 32; k++) {
                 uint8_t byte_val = px[k];
 
-                int8_t v0 = (int8_t)((byte_val >> 6) & 0x03);
-                int8_t v1 = (int8_t)((byte_val >> 4) & 0x03);
-                int8_t v2 = (int8_t)((byte_val >> 2) & 0x03);
-                int8_t v3 = (int8_t)(byte_val & 0x03);
+                int8_t v0 = (int8_t)((byte_val >> 6) & 0x03) - 1;
+                int8_t v1 = (int8_t)((byte_val >> 4) & 0x03) - 1;
+                int8_t v2 = (int8_t)((byte_val >> 2) & 0x03) - 1;
+                int8_t v3 = (int8_t)(byte_val & 0x03) - 1;
 
                 int8_t y0 = py[k + 0 * 32];
                 int8_t y1 = py[k + 1 * 32];

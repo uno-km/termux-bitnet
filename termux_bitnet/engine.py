@@ -228,15 +228,15 @@ class BitNetEngine:
         cli_bin = self._find_bitnet_cli_binary()
         has_valid_model = bool(self.config.model_path and os.path.isfile(self.config.model_path))
 
-        # Backend selection logic: CLI binary (Priority 1) or Native C ABI (Priority 2)
-        if cli_bin and has_valid_model:
-            yield from self._generate_stream_cli(prompt, safe_max_tokens, cli_bin)
-        elif self._lib:
+        # Backend selection logic: In-process Native C ABI (Priority 1) or CLI binary (Secondary/Explicit)
+        if self._lib:
             yield from self._generate_stream_native(prompt, safe_max_tokens)
+        elif cli_bin and has_valid_model:
+            yield from self._generate_stream_cli(prompt, safe_max_tokens, cli_bin)
         else:
             raise BitNetEngineNotFound(
-                "Native BitNet C++ runtime library is not loaded.\n"
-                "No usable BitNet inference runtime detected (neither 'llama-cli' binary nor 'libtermux_bitnet.so' shared library found).\n"
+                "[termux-bitnet] [FAIL-FAST] Native BitNet C++ runtime library is not loaded.\n"
+                "No usable BitNet inference runtime detected (neither 'libtermux_bitnet.so' shared library nor 'llama-cli' binary found).\n"
                 "Please compile/install the native engine by running: termux-bitnet install\n"
                 "Or verify your ARM64 device environment."
             )
@@ -356,28 +356,7 @@ class BitNetEngine:
                     f"[termux-bitnet] CLI inference stream failed mid-generation: {e}"
                 ) from e
 
-            # C ABI fallback — 토큰 미방출 + _lib 로드된 경우에만 허용
-            if self._lib:
-                import logging
-                _logger = logging.getLogger("termux_bitnet")
-                _primary_error = {"code": "CLI_INFERENCE_FAILED", "message": str(e)}
-                _logger.warning(
-                    "[termux-bitnet] CLI execution failed before token generation "
-                    "(primary_error=%s). Falling back to C ABI. "
-                    "fallback_used=True requested_backend=cli executed_backend=c_abi",
-                    e,
-                )
-                # fallback 결과에 메타데이터 주입 — Generator 이므로 첫 chunk 앞에 삽입 불가.
-                # 대신 self._last_fallback_meta에 기록하여 caller가 조회 가능하도록 한다.
-                self._last_fallback_meta = {
-                    "fallback_used": True,
-                    "requested_backend": "cli",
-                    "executed_backend": "c_abi",
-                    "primary_error": _primary_error,
-                }
-                yield from self._generate_stream_native(prompt, max_tokens)
-            else:
-                raise RuntimeError(f"[termux-bitnet] CLI inference failed: {e}") from e
+            raise RuntimeError(f"[termux-bitnet] [FAIL-FAST] CLI inference failed: {e}") from e
 
 
 
@@ -425,34 +404,30 @@ class BitNetEngine:
         if not text:
             return []
 
-        # 1. Primary: Execute real C++ bitnet_tokenize with auto-initialized context
-        if self._lib:
-            try:
-                if not self._ctx and self.config.model_path and os.path.isfile(self.config.model_path):
-                    self._init_context()
-                if self._ctx:
-                    import unicodedata
-                    safe_text = unicodedata.normalize("NFC", text).encode("utf-8", errors="replace")
-                    max_tokens = len(safe_text) + 64
-                    buf = (ctypes.c_int32 * max_tokens)()
-                    count = self._lib.bitnet_tokenize(self._ctx, safe_text, buf, max_tokens)
-                    if count > 0:
-                        return [buf[i] for i in range(count)]
-            except Exception as exc:
-                logger.warning(
-                    "[termux-bitnet] bitnet_tokenize C++ ABI 호출 실패, Unicode 폴백 사용: %s", exc
-                )
+        # 1. Execute true native C++ bitnet_tokenize with auto-initialized context
+        if not self._lib:
+            raise BitNetEngineNotFound(
+                "[termux-bitnet] [FAIL-FAST] Native C ABI library is not loaded. Cannot tokenize without native engine."
+            )
 
-        # 2. Secondary: Standalone Unicode / BPE-aware subword tokenizer for Hangul & CJK
+        if not self._ctx and self.config.model_path and os.path.isfile(self.config.model_path):
+            self._init_context()
+
+        if not self._ctx:
+            raise RuntimeError(
+                "[termux-bitnet] [FAIL-FAST] Engine context is uninitialized. A valid model_path is required for tokenization."
+            )
+
         import unicodedata
-        import re
-        norm_text = unicodedata.normalize("NFC", text)
-        # Korean Hangul syllables, CJK ideographs, Kana, words, and punctuation
-        pattern = r"[\uac00-\ud7a3]|[a-zA-Z0-9]+|[^\w\s]|[\u4e00-\u9fff]|[\u3040-\u309f]|[\u30a0-\u30ff]"
-        matches = re.findall(pattern, norm_text, re.UNICODE)
-        if not matches:
-            matches = norm_text.split()
-        return [1] * max(len(matches), 1)
+        safe_text = unicodedata.normalize("NFC", text).encode("utf-8", errors="replace")
+        max_tokens = len(safe_text) * 2 + 128
+        buf = (ctypes.c_int32 * max_tokens)()
+        count = self._lib.bitnet_tokenize(self._ctx, safe_text, buf, max_tokens)
+        if count < 0:
+            raise RuntimeError(
+                f"[termux-bitnet] [FAIL-FAST] Native BPE tokenization failed with error code {count} for text: '{text[:40]}...'"
+            )
+        return [buf[i] for i in range(count)]
 
     def count_tokens(self, text: str) -> int:
         """Count true token length without byte division heuristics."""

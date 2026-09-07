@@ -3,6 +3,7 @@ import io
 import json
 import os
 import sys
+from pathlib import Path
 from unittest.mock import patch
 
 from termux_bitnet.engine import BitNetEngine, BitNetConfig
@@ -54,10 +55,11 @@ class TestTermuxBitNetRemediation(unittest.TestCase):
     def test_cli_model_validation_fails_fast(self):
         """Verify validate_model_path_or_exit exits with code 10 and prints catalog when model is missing."""
         stderr_capture = io.StringIO()
-        with patch("sys.stderr", stderr_capture):
-            with self.assertRaises(SystemExit) as ctx:
-                validate_model_path_or_exit("")
-            self.assertEqual(ctx.exception.code, 10)
+        with patch("pathlib.Path.home", return_value=Path("/non_existent_cache_dir_for_test")):
+            with patch("sys.stderr", stderr_capture):
+                with self.assertRaises(SystemExit) as ctx:
+                    validate_model_path_or_exit("")
+                self.assertEqual(ctx.exception.code, 10)
 
         with patch("sys.stderr", stderr_capture):
             with self.assertRaises(SystemExit) as ctx:
@@ -189,10 +191,13 @@ class TestTermuxBitNetRemediation(unittest.TestCase):
         
         engine = BitNetEngine(BitNetConfig())
         korean_text = "안녕하세요! termux-bitnet 1.58비트 고성능 온디바이스 엔진입니다."
-        count = engine.count_tokens(korean_text)
         
-        # 68 bytes in UTF-8 -> Old flawed heuristic gave 68//4 = 17.
-        # Unicode word tokenizer or native tokenizer produces reasonable token count > 0
+        if not engine._lib:
+            with self.assertRaises(BitNetEngineNotFound):
+                engine.count_tokens(korean_text)
+            return
+
+        count = engine.count_tokens(korean_text)
         self.assertGreater(count, 0)
         self.assertLessEqual(count, len(korean_text) * 2)
         
