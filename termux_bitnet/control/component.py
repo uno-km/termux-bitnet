@@ -49,7 +49,7 @@ class BitNetControl(ComponentControl):
     def _get_version(self) -> str:
         try:
             from termux_bitnet import __version__; return __version__
-        except Exception: return "1.1.2"
+        except Exception: return "1.4.0"
 
     def component_info(self) -> dict:
         info = ComponentInfo(

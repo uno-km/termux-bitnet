@@ -89,6 +89,19 @@ struct BitNetLayerWeights {
     uint32_t ffn_sub_norm_type = 0;
     const void*  w_down = nullptr;        // blk.N.ffn_down.weight
     uint32_t w_down_type = 30;
+
+    // GPU residency byte offsets in unified Vulkan buffer
+    uint32_t gpu_offset_attn_norm = 0;
+    uint32_t gpu_offset_wq = 0;
+    uint32_t gpu_offset_wk = 0;
+    uint32_t gpu_offset_wv = 0;
+    uint32_t gpu_offset_wo = 0;
+    uint32_t gpu_offset_attn_sub_norm = 0xFFFFFFFF;
+    uint32_t gpu_offset_ffn_norm = 0;
+    uint32_t gpu_offset_w_gate = 0;
+    uint32_t gpu_offset_w_up = 0;
+    uint32_t gpu_offset_w_down = 0;
+    uint32_t gpu_offset_ffn_sub_norm = 0xFFFFFFFF;
 };
 
 // In-Memory Dynamic KV Cache

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(termux_bitnet LANGUAGES C CXX)
+project(termux_bitnet VERSION 1.4.0 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
@@ -47,8 +47,8 @@ set(BITNET_CORE_SOURCES
     src/c_api.cpp
 )
 
-# Vulkan GPU Compute Acceleration Option
-option(GGML_VULKAN "Enable native Vulkan GPU compute engine" ON)
+# Vulkan GPU Compute Acceleration Option (Default OFF: core is clean CPU; GPU delegated to ameva-runtime)
+option(GGML_VULKAN "Enable native Vulkan GPU compute engine" OFF)
 
 if(GGML_VULKAN)
     add_definitions(-DGGML_USE_VULKAN=1)

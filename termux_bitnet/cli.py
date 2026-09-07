@@ -65,6 +65,46 @@ def cmd_info(args):
     print_hardware_summary()
 
 
+def cmd_doctor(args):
+    """Run comprehensive pre-flight diagnostic checks."""
+    from termux_bitnet.hardware import doctor
+    rep = doctor()
+    print("=========================================================")
+    print(f"       termux-bitnet Pre-flight Doctor (v{__version__})   ")
+    print("=========================================================")
+    print(f"  Status:               {rep.get('status')}")
+    print(f"  Recommended Backend:  {rep.get('recommended_backend')}")
+    print(f"  Overall Success:      {'PASS' if rep.get('overall_success') else 'WARN'}")
+    print(f"  Passed Stages:        {rep.get('passed_stages')}/7")
+    if "arch" in rep:
+        print(f"  CPU Architecture:     {rep.get('arch')}")
+        print(f"  ARM NEON SIMD:        {'YES' if rep.get('has_neon') else 'NO'}")
+        print(f"  ARM DotProd Accel:    {'YES' if rep.get('has_dotprod') else 'NO'}")
+    if rep.get("doctor_report"):
+        dr = rep["doctor_report"]
+        print(f"  Vulkan Device:        {getattr(dr, 'device_name', 'Unknown')}")
+        print(f"  Vendor ID:            {getattr(dr, 'vendor_id', 'Unknown')}")
+    print("=========================================================")
+
+
+def cmd_models(args):
+    """List available model catalog and locally cached weights."""
+    from termux_bitnet.downloader import list_available_models, DEFAULT_CACHE_DIR
+    list_available_models()
+    print("\n--- [Locally Cached Models] ---")
+    if DEFAULT_CACHE_DIR.exists():
+        cached_files = list(DEFAULT_CACHE_DIR.glob("*.gguf"))
+        if cached_files:
+            for cf in cached_files:
+                sz_mb = cf.stat().st_size / (1024 * 1024)
+                print(f"  - {cf.name:35s} [{sz_mb:.1f} MB] -> {cf}")
+        else:
+            print("  (No cached models found. Run 'termux-bitnet download bitnet-2b')")
+    else:
+        print("  (Cache directory does not exist yet.)")
+    print()
+
+
 def cmd_download(args):
     download_model(args.model_name, output_dir=args.output_dir)
 
@@ -145,17 +185,31 @@ def cmd_chat(args):
         model_path=resolved_model,
         system_prompt=args.system_prompt or "",
         stop_tokens=args.stop or "",
+        device=getattr(args, "device", "auto"),
         n_threads=args.threads,
         n_ctx=args.ctx_size,
+        n_batch=getattr(args, "batch_size", 512),
+        n_ubatch=getattr(args, "ubatch_size", 512),
+        n_predict=args.n_predict,
+        top_k=args.top_k,
+        repeat_last_n=getattr(args, "repeat_last_n", 64),
+        n_gpu_layers=getattr(args, "n_gpu_layers", 0),
+        seed=getattr(args, "seed", 0),
         temperature=args.temp,
         top_p=args.top_p,
-        top_k=args.top_k,
+        min_p=getattr(args, "min_p", 0.05),
+        typical_p=getattr(args, "typical", 1.0),
         repeat_penalty=args.repeat_penalty,
+        frequency_penalty=getattr(args, "freq_penalty", 0.0),
+        presence_penalty=getattr(args, "presence_penalty", 0.0),
+        flash_attn=getattr(args, "flash_attn", False),
+        verbose=getattr(args, "verbose", False),
     )
 
     print("=========================================================")
     print(f"  termux-bitnet Interactive Chat (v{__version__})")
-    print(f"  Model: {resolved_model}")
+    print(f"  Model:  {resolved_model}")
+    print(f"  Device: {config.device} (layers: {config.n_gpu_layers})")
     print("  Type 'exit' or 'quit' to end session.")
     print("=========================================================")
 
@@ -185,7 +239,19 @@ def cmd_chat(args):
 
 def cmd_serve(args):
     resolved_model = validate_model_path_or_exit(args.model)
-    run_server(host=args.host, port=args.port, model_path=resolved_model)
+    run_server(
+        host=args.host,
+        port=args.port,
+        model_path=resolved_model,
+        device=getattr(args, "device", "auto"),
+        n_threads=getattr(args, "threads", 4),
+        n_ctx=getattr(args, "ctx_size", 2048),
+        n_batch=getattr(args, "batch_size", 512),
+        n_ubatch=getattr(args, "ubatch_size", 512),
+        n_gpu_layers=getattr(args, "n_gpu_layers", 0),
+        flash_attn=getattr(args, "flash_attn", False),
+        verbose=getattr(args, "verbose", False),
+    )
 
 
 def cmd_benchmark(args):
@@ -193,7 +259,8 @@ def cmd_benchmark(args):
 
     print("=========================================================")
     print("        termux-bitnet Comprehensive Benchmark            ")
-    print(f"  Model: {resolved_model}")
+    print(f"  Model:  {resolved_model}")
+    print(f"  Device: {getattr(args, 'device', 'auto')} (layers: {getattr(args, 'n_gpu_layers', 0)})")
     print("=========================================================")
     print_hardware_summary()
 
@@ -203,7 +270,15 @@ def cmd_benchmark(args):
         ("Psychology (CBT Analysis)", "Analyze: 'I made a mistake, so I am a total failure and will lose my job.'"),
     ]
 
-    config = BitNetConfig(model_path=resolved_model, n_threads=args.threads)
+    config = BitNetConfig(
+        model_path=resolved_model,
+        device=getattr(args, "device", "auto"),
+        n_threads=args.threads,
+        n_ctx=getattr(args, "ctx_size", 2048),
+        n_gpu_layers=getattr(args, "n_gpu_layers", 0),
+        flash_attn=getattr(args, "flash_attn", False),
+        verbose=getattr(args, "verbose", False),
+    )
     try:
         with BitNetEngine(config) as engine:
             for title, p in prompts:
@@ -237,6 +312,14 @@ def main():
     # info
     p_info = subparsers.add_parser("info", help="Inspect local CPU SIMD/DotProd capabilities")
     p_info.set_defaults(func=cmd_info)
+
+    # doctor
+    p_doc = subparsers.add_parser("doctor", help="Run 7-tier pre-flight diagnostic checks")
+    p_doc.set_defaults(func=cmd_doctor)
+
+    # models
+    p_models = subparsers.add_parser("models", help="List verified model catalog and locally cached weights")
+    p_models.set_defaults(func=cmd_models)
 
     # download
     p_dl = subparsers.add_parser("download", help="Download 1.58-bit GGUF model")
@@ -276,16 +359,27 @@ def main():
     # chat
     p_chat = subparsers.add_parser("chat", help="Start interactive chat REPL")
     p_chat.add_argument("-m", "--model", default=None, help="Path to GGUF model binary (default: auto-discover cached model)")
-    p_chat.add_argument("-d", "--device", default="auto", choices=["auto", "gpu", "vulkan", "cpu"], help="Hardware acceleration backend")
+    p_chat.add_argument("-d", "--device", default="auto", choices=["auto", "gpu", "vulkan", "cpu"], help="Hardware acceleration backend (default: auto)")
     p_chat.add_argument("-t", "--threads", type=int, default=8, help="Worker threads (default: 8)")
-    p_chat.add_argument("-c", "--ctx-size", type=int, default=2048, help="Context size")
-    p_chat.add_argument("-n", "--n-predict", type=int, default=256, help="Max tokens per turn")
-    p_chat.add_argument("--temp", type=float, default=0.7, help="Temperature")
-    p_chat.add_argument("--top-p", type=float, default=0.95, help="Top-P threshold")
-    p_chat.add_argument("--top-k", type=int, default=40, help="Top-K cutoff")
-    p_chat.add_argument("--repeat-penalty", type=float, default=1.15, help="Repetition penalty")
+    p_chat.add_argument("-c", "--ctx-size", type=int, default=2048, help="Context size (default: 2048)")
+    p_chat.add_argument("-b", "--batch-size", type=int, default=512, help="Batch size (default: 512)")
+    p_chat.add_argument("-ub", "--ubatch-size", type=int, default=512, help="Micro-batch size (default: 512)")
+    p_chat.add_argument("-n", "--n-predict", type=int, default=256, help="Max tokens per turn (default: 256)")
+    p_chat.add_argument("--temp", type=float, default=0.7, help="Softmax temperature (default: 0.7)")
+    p_chat.add_argument("--top-p", type=float, default=0.95, help="Top-P threshold (default: 0.95)")
+    p_chat.add_argument("--top-k", type=int, default=40, help="Top-K cutoff (default: 40)")
+    p_chat.add_argument("--min-p", type=float, default=0.05, help="Min-P cutoff (default: 0.05)")
+    p_chat.add_argument("--typical", type=float, default=1.0, help="Locally typical sampling (default: 1.0)")
+    p_chat.add_argument("--repeat-penalty", type=float, default=1.15, help="Repetition penalty (default: 1.15)")
+    p_chat.add_argument("--repeat-last-n", type=int, default=64, help="Repetition penalty window (default: 64)")
+    p_chat.add_argument("--freq-penalty", type=float, default=0.0, help="Frequency penalty (default: 0.0)")
+    p_chat.add_argument("--presence-penalty", type=float, default=0.0, help="Presence penalty (default: 0.0)")
+    p_chat.add_argument("-s", "--seed", type=int, default=0, help="RNG seed (0 for random)")
+    p_chat.add_argument("-ngl", "--n-gpu-layers", type=int, default=0, help="GPU/NPU offload layers (default: 0)")
+    p_chat.add_argument("-fa", "--flash-attn", action="store_true", help="Enable Flash Attention")
     p_chat.add_argument("--system-prompt", help="System prompt prefix")
     p_chat.add_argument("-r", "--stop", help="Comma-separated stop tokens")
+    p_chat.add_argument("--verbose", action="store_true", help="Enable verbose logs")
     p_chat.set_defaults(func=cmd_chat)
 
     # serve
@@ -293,12 +387,25 @@ def main():
     p_serve.add_argument("-m", "--model", default=None, help="Path to GGUF model binary (default: auto-discover cached model)")
     p_serve.add_argument("--host", default="0.0.0.0", help="Binding host")
     p_serve.add_argument("--port", type=int, default=8080, help="Port number")
+    p_serve.add_argument("-d", "--device", default="auto", choices=["auto", "gpu", "vulkan", "cpu"], help="Hardware acceleration backend (default: auto)")
+    p_serve.add_argument("-t", "--threads", type=int, default=4, help="Worker threads (default: 4)")
+    p_serve.add_argument("-c", "--ctx-size", type=int, default=2048, help="Context size (default: 2048)")
+    p_serve.add_argument("-b", "--batch-size", type=int, default=512, help="Batch size (default: 512)")
+    p_serve.add_argument("-ub", "--ubatch-size", type=int, default=512, help="Micro-batch size (default: 512)")
+    p_serve.add_argument("-ngl", "--n-gpu-layers", type=int, default=0, help="GPU/NPU offload layers (default: 0)")
+    p_serve.add_argument("-fa", "--flash-attn", action="store_true", help="Enable Flash Attention")
+    p_serve.add_argument("--verbose", action="store_true", help="Enable verbose logs")
     p_serve.set_defaults(func=cmd_serve)
 
     # benchmark
     p_bench = subparsers.add_parser("benchmark", help="Run inference performance benchmark")
     p_bench.add_argument("-m", "--model", default=None, help="Path to GGUF model binary (default: auto-discover cached model)")
-    p_bench.add_argument("-t", "--threads", type=int, default=4, help="Worker threads")
+    p_bench.add_argument("-d", "--device", default="auto", choices=["auto", "gpu", "vulkan", "cpu"], help="Hardware acceleration backend (default: auto)")
+    p_bench.add_argument("-t", "--threads", type=int, default=4, help="Worker threads (default: 4)")
+    p_bench.add_argument("-c", "--ctx-size", type=int, default=2048, help="Context size (default: 2048)")
+    p_bench.add_argument("-ngl", "--n-gpu-layers", type=int, default=0, help="GPU/NPU offload layers (default: 0)")
+    p_bench.add_argument("-fa", "--flash-attn", action="store_true", help="Enable Flash Attention")
+    p_bench.add_argument("--verbose", action="store_true", help="Enable verbose logs")
     p_bench.set_defaults(func=cmd_benchmark)
 
     # ── AMEVA Component Protocol v1 ─────────────────────────────────────────

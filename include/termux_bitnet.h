@@ -70,6 +70,14 @@ BITNET_API bitnet_params_t bitnet_default_params(void);
 BITNET_API bitnet_context_t bitnet_init(const bitnet_params_t* params);
 
 /**
+ * @brief Dynamically update sampling and runtime hyperparameters for active context.
+ * @param ctx Context handle.
+ * @param params Pointer to updated parameters.
+ * @return 0 on success, non-zero on failure.
+ */
+BITNET_API int32_t bitnet_set_params(bitnet_context_t ctx, const bitnet_params_t* params);
+
+/**
  * @brief Release all memory, KV cache, and model weights associated with the context.
  * @param ctx Context handle.
  */
@@ -121,6 +129,12 @@ BITNET_API int32_t bitnet_sample(bitnet_context_t ctx);
  * @return Total number of tokens generated.
  */
 BITNET_API int32_t bitnet_generate_stream(bitnet_context_t ctx, const char* prompt, int32_t max_new_tokens, bitnet_stream_cb callback, void* user_data);
+
+/**
+ * @brief Check whether native core engine was compiled with Vulkan GPU support.
+ * @return true if GGML_USE_VULKAN is enabled, false otherwise.
+ */
+BITNET_API bool bitnet_has_vulkan(void);
 
 /**
  * @brief Inspect runtime hardware features and acceleration modes.

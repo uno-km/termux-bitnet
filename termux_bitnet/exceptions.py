@@ -11,3 +11,8 @@ class BitNetEngineNotFound(BitNetError):
 class RuntimeNotFoundError(BitNetEngineNotFound):
     """Raised when runtime resolver fails to locate verified native binaries."""
     pass
+
+class PlatformNotSupportedError(BitNetError):
+    """Raised when running on an unsupported platform or missing hardware abstraction provider."""
+    pass
+

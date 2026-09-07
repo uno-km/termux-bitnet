@@ -16,14 +16,17 @@ static void print_usage(std::ostream& out) {
         << "  -m, --model <path>         Path to GGUF model binary (*.gguf)\n"
         << "  -p, --prompt <text>        Input prompt text for text generation\n\n"
         << "Hyperparameter Options:\n"
+        << "  -d, --device <backend>     Hardware device ('auto', 'cpu', 'vulkan', 'gpu')\n"
         << "  -t, --threads <int>        CPU worker threads (default: 4)\n"
         << "  -c, --ctx-size <int>       Context window size (default: 2048)\n"
         << "  -b, --batch-size <int>     Batch size (default: 512)\n"
+        << "  -ub, --ubatch-size <int>   Micro-batch size (default: 512)\n"
         << "  -n, --n-predict <int>      Max tokens to predict (default: 128)\n"
         << "  --temp <float>             Sampling temperature (default: 0.7)\n"
         << "  --top-p <float>            Top-P cumulative probability (default: 0.95)\n"
         << "  --top-k <int>              Top-K selection threshold (default: 40)\n"
         << "  --min-p <float>            Min-P probability threshold (default: 0.05)\n"
+        << "  --typical <float>          Locally typical threshold (default: 1.0)\n"
         << "  --repeat-penalty <float>   Repetition penalty multiplier (default: 1.15)\n"
         << "  --repeat-last-n <int>      Repetition penalty window (default: 64)\n"
         << "  --freq-penalty <float>     Frequency penalty (default: 0.0)\n"
@@ -67,6 +70,22 @@ int main(int argc, char** argv) {
             return 0;
         } else if ((arg == "-m" || arg == "--model") && i + 1 < argc) {
             params.model_path = argv[++i];
+        } else if ((arg == "-d" || arg == "--device") && i + 1 < argc) {
+            std::string dev_arg = argv[++i];
+            if (dev_arg == "cpu") {
+                params.n_gpu_layers = 0;
+            } else if (dev_arg == "gpu" || dev_arg == "vulkan") {
+                if (params.n_gpu_layers == 0) params.n_gpu_layers = 33;
+            } else if (dev_arg == "auto") {
+#if defined(GGML_USE_VULKAN)
+                if (params.n_gpu_layers == 0) params.n_gpu_layers = 33;
+#else
+                params.n_gpu_layers = 0;
+#endif
+            } else {
+                std::cerr << "[ERROR] Unsupported device: '" << dev_arg << "'. Expected 'auto', 'cpu', 'vulkan', or 'gpu'." << std::endl;
+                return 2; // EXIT_ARG_ERROR
+            }
         } else if ((arg == "-p" || arg == "--prompt") && i + 1 < argc) {
             prompt = argv[++i];
         } else if ((arg == "-t" || arg == "--threads") && i + 1 < argc) {

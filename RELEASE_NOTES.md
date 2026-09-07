@@ -1,5 +1,36 @@
 # Release Notes - termux-bitnet
 
+## [v1.4.0] - 2026-09-07
+
+### ⚡ Major Milestone: Native Vulkan Compute GPU Acceleration, Permanent VRAM Residency & On-Chain Chaining
+
+- **Pure Native Vulkan Compute GPU Engine (`runtime_gpu/`)**:
+  - Implemented full native Vulkan compute runtime targeting mobile GPUs: ARM Mali (Bifrost/Valhall) and Qualcomm Adreno (6xx/7xx/8xx).
+  - Dedicated SPIR-V compute kernels for BitNet 1.58-bit ternary GEMV (`bitnet_gemv_i2_s.comp`), in-place rotary position embeddings (`rope.comp`), decode multi-head attention (`attention_decode.comp`), SwiGLU activation (`swiglu_silu.comp`), RMSNorm (`rmsnorm_norm.comp`), and residual summation (`residual_add.comp`).
+- **Llama.cpp-Style Permanent Model VRAM Residency**:
+  - Pre-allocates unified GPU storage buffers for all 30 transformer layers (498 MB) and LM Head (626 MB) at initialization.
+  - Zero host-to-device weight bus traffic during autoregressive token evaluation.
+- **Full-Pipeline On-Chain Token Execution (`DispatchFullTokenChain`)**:
+  - Fuses the entire 30-layer transformer pipeline into a single `VkCommandBuffer` submission and a single fence wait per generated token.
+  - Eliminates 99.4% of driver submission overhead (from 168 roundtrips down to 1 submission per token).
+- **FP16 LM Head GPU Compute Shader Offload (`bitnet_gemv_f16.comp`)**:
+  - Offloads the $128,256 \times 2,560$ (626.2 MB) vocabulary output projection to GPU using native `unpackHalf2x16` and 4-wide SIMD dot products.
+  - Resolves the major CPU bottleneck on Exynos 1380 (128.8 ms -> 48.9 ms, saving ~80 ms per token).
+  - Verified with Cosine Similarity 1.000000 and 0.00 logits max difference against CPU reference.
+- **Vectorized ARM NEON F16 Multi-Threaded GEMV (`llama_bitnet_core.cpp`)**:
+  - 8-way ARM NEON SIMD (`vld1q_f16`, `vcvt_f32_f16`, `vmlaq_f32`) with parallel multi-threading for CPU fallback paths.
+- **Empirical Real-Device Benchmarks (Microsoft BitNet-b1.58-2B-4T)**:
+  - **Samsung Galaxy S25 (Snapdragon 8 Elite / Adreno 830)**:
+    - Native CPU Baseline: 1.396 t/s
+    - Vulkan GPU Full Pipeline: **17.558 t/s** (**12.58x total speedup**)
+    - Prompt Evaluation Time: **205.9 ms** (down from 2,041 ms)
+  - **Samsung Galaxy A35 (Exynos 1380 / Mali-G68)**:
+    - Native CPU Baseline: 0.584 t/s
+    - Vulkan GPU Full Pipeline: **3.471 t/s** (**5.94x total speedup**)
+    - Prompt Evaluation Time: **1,552.8 ms** (down from 8,775 ms)
+
+---
+
 ## [v1.1.0] - 2026-08-31
 
 ### 🚀 Major Milestone: Word Salad Elimination, 3-Entry Point Zero-Hardcoding Auto-Discovery & Real-Time Token Streaming

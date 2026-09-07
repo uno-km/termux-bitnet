@@ -4,12 +4,12 @@ import os
 import sys
 import ctypes
 import logging
-from typing import Generator, Optional, List, Tuple
+from typing import Generator, Optional, List, Tuple, Any
 from pathlib import Path
 
 from termux_bitnet.config import BitNetConfig, GenerationMetrics
-from termux_bitnet.hardware import detect_hardware
-from termux_bitnet.exceptions import BitNetEngineNotFound, RuntimeNotFoundError
+from termux_bitnet.hardware import detect_hardware, resolve_device_backend, bind_bitnet_hardware
+from termux_bitnet.exceptions import BitNetEngineNotFound, RuntimeNotFoundError, PlatformNotSupportedError
 
 logger = logging.getLogger(__name__)
 
@@ -53,19 +53,16 @@ class BitNetEngine:
             hw = detect_hardware()
             self.config.n_threads = hw.recommended_threads
 
-        # Hardware acceleration context delegation via ameva-runtime
+        self._requested_device = str(self.config.device or "auto").lower().strip()
+
+        # Device Resolution Protocol: CPU NEON default / fail-fast GPU via ameva-runtime
+        backend, ngl = resolve_device_backend(self.config.device, self.config.n_gpu_layers)
+        self.config.device = backend
+        self.config.n_gpu_layers = ngl
+
         self.avr_ctx = None
-        try:
-            from ameva_runtime import vulkan as avr
-            self.avr_ctx = avr.get_or_create_context(self.config.device)
-            if self.avr_ctx.is_gpu and self.config.n_gpu_layers == 0:
-                self.config.n_gpu_layers = 33
-        except Exception as e:
-            if str(self.config.device).lower() in ("gpu", "vulkan"):
-                raise RuntimeError(
-                    f"[termux-bitnet] [FAIL-FAST] Explicit GPU backend requested ('{self.config.device}'), "
-                    f"but Vulkan hardware initialization failed: {e}"
-                )
+        if backend == "vulkan":
+            self.avr_ctx = bind_bitnet_hardware(self, "vulkan")
 
         # Strict validation of model_path if provided
         if self.config.model_path:
@@ -84,6 +81,9 @@ class BitNetEngine:
         self._lib = self._load_native_library()
         self._ctx = None
         self._last_metrics = GenerationMetrics()
+        self._c_model_path = None
+        self._c_system_prompt = None
+        self._c_stop_tokens = None
         self._setup_bindings()
 
         if self._lib and self.config.model_path:
@@ -91,11 +91,17 @@ class BitNetEngine:
 
     def _find_library_path(self) -> Optional[Path]:
         """Locate compiled native shared library in package or system paths."""
+        termux_prefix = os.environ.get("PREFIX", "/data/data/com.termux/files/usr")
         candidates = [
             # Local package build directory
             Path(__file__).parent / "libtermux_bitnet.so",
             Path(__file__).parent / "termux_bitnet.dll",
             Path(__file__).parent / "libtermux_bitnet.dylib",
+            # Termux / system library paths
+            Path(termux_prefix) / "lib" / "libtermux_bitnet.so",
+            Path("/data/data/com.termux/files/usr/lib/libtermux_bitnet.so"),
+            Path("/usr/local/lib/libtermux_bitnet.so"),
+            Path("/usr/lib/libtermux_bitnet.so"),
             # CMake build outputs
             Path(__file__).parents[1] / "build" / "libtermux_bitnet.so",
             Path(__file__).parents[1] / "build" / "Release" / "termux_bitnet.dll",
@@ -152,13 +158,63 @@ class BitNetEngine:
         self._lib.bitnet_get_perf_stats.restype = None
         self._lib.bitnet_get_perf_stats.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_double), ctypes.POINTER(ctypes.c_double), ctypes.POINTER(ctypes.c_double)]
 
+        if hasattr(self._lib, "bitnet_has_vulkan"):
+            self._lib.bitnet_has_vulkan.restype = ctypes.c_bool
+            self._lib.bitnet_has_vulkan.argtypes = []
+
+        if hasattr(self._lib, "bitnet_set_params"):
+            self._lib.bitnet_set_params.restype = ctypes.c_int32
+            self._lib.bitnet_set_params.argtypes = [ctypes.c_void_p, ctypes.POINTER(CBitNetParams)]
+
+    def has_vulkan_support(self) -> bool:
+        """Check whether the loaded native shared library was built with Vulkan GPU support."""
+        if not self._lib:
+            return False
+        if hasattr(self._lib, "bitnet_has_vulkan"):
+            try:
+                return bool(self._lib.bitnet_has_vulkan())
+            except Exception:
+                pass
+        try:
+            hw_info = self.get_hardware_info()
+            if "VULKAN = 1" in hw_info:
+                return True
+            if "VULKAN = 0" in hw_info:
+                return False
+        except Exception:
+            pass
+        return False
+
     def _init_context(self) -> None:
-        """Instantiate C context from config."""
+        """Instantiate C context from config with strict Decoupled AMEVA Gateway routing."""
         if not self.config.model_path:
             raise ValueError(
                 "[termux-bitnet] Cannot initialize BitNet engine context without a valid model_path. "
                 "Specify config.model_path or run 'termux-bitnet download bitnet-2b'."
             )
+
+        # Check binary GPU capabilities vs requested device configuration
+        requested_gpu = (self.config.n_gpu_layers or 0) > 0 or self.config.device in ("vulkan", "gpu")
+        native_has_vk = self.has_vulkan_support()
+
+        if requested_gpu and not native_has_vk:
+            if getattr(self, "_requested_device", "auto") in ("vulkan", "gpu"):
+                from termux_bitnet.exceptions import PlatformNotSupportedError
+                raise PlatformNotSupportedError(
+                    f"[ERROR: AMEVA-BITNET-E002] Explicit GPU backend ('--device {self._requested_device}') requested, "
+                    f"but native core library ('{self._find_library_path()}') was compiled without Vulkan support.\n"
+                    f"Cause: Binary was built with pure CPU NEON configuration (GGML_VULKAN=OFF).\n"
+                    f"Action Required: Run with CPU backend: termux-bitnet run --device cpu ...\n"
+                    f"Or compile native library with Vulkan: cmake -B build -DGGML_VULKAN=ON"
+                )
+            else:
+                # Original requested device was "auto": Graceful fallback to CPU NEON (Rule: auto시 gpu -> cpu풀백)
+                import sys
+                sys.stdout.write("[INFO] [termux-bitnet] Vulkan GPU acceleration not compiled into core binary. "
+                                 "Falling back to ARM64 NEON CPU backend.\n")
+                sys.stdout.flush()
+                self.config.device = "cpu"
+                self.config.n_gpu_layers = 0
 
         import unicodedata
         def _safe_encode(s: str) -> bytes:
@@ -167,30 +223,46 @@ class BitNetEngine:
             clean_s = unicodedata.normalize("NFC", s)
             return clean_s.encode("utf-8", errors="replace")
 
+        # Crucial: Retain Python references to encoded bytes buffers on instance (self)
+        # to prevent Python GC from releasing memory while C ABI reads the char* pointer.
+        self._c_model_path = _safe_encode(self.config.model_path)
+        self._c_system_prompt = _safe_encode(self.config.system_prompt)
+        self._c_stop_tokens = _safe_encode(self.config.stop_tokens)
+
         c_params = CBitNetParams()
-        c_params.model_path = _safe_encode(self.config.model_path)
-        c_params.system_prompt = _safe_encode(self.config.system_prompt)
-        c_params.stop_tokens = _safe_encode(self.config.stop_tokens)
-        c_params.n_threads = self.config.n_threads
-        c_params.n_ctx = self.config.n_ctx
-        c_params.n_batch = self.config.n_batch
-        c_params.n_ubatch = self.config.n_ubatch
-        c_params.n_predict = self.config.n_predict
-        c_params.top_k = self.config.top_k
-        c_params.repeat_last_n = self.config.repeat_last_n
-        c_params.n_gpu_layers = self.config.n_gpu_layers
-        c_params.seed = self.config.seed
-        c_params.temperature = self.config.temperature
-        c_params.top_p = self.config.top_p
-        c_params.min_p = self.config.min_p
-        c_params.typical_p = self.config.typical_p
-        c_params.repeat_penalty = self.config.repeat_penalty
-        c_params.frequency_penalty = self.config.frequency_penalty
-        c_params.presence_penalty = self.config.presence_penalty
-        c_params.flash_attn = self.config.flash_attn
-        c_params.verbose = self.config.verbose
+        c_params.model_path = self._c_model_path
+        c_params.system_prompt = self._c_system_prompt
+        c_params.stop_tokens = self._c_stop_tokens
+        c_params.n_threads = int(self.config.n_threads if self.config.n_threads is not None else 4)
+        c_params.n_ctx = int(self.config.n_ctx if self.config.n_ctx is not None else 2048)
+        c_params.n_batch = int(self.config.n_batch if self.config.n_batch is not None else 512)
+        c_params.n_ubatch = int(self.config.n_ubatch if self.config.n_ubatch is not None else 512)
+        c_params.n_predict = int(self.config.n_predict if self.config.n_predict is not None else 128)
+        c_params.top_k = int(self.config.top_k if self.config.top_k is not None else 40)
+        c_params.repeat_last_n = int(self.config.repeat_last_n if self.config.repeat_last_n is not None else 64)
+        c_params.n_gpu_layers = int(self.config.n_gpu_layers if self.config.n_gpu_layers is not None else 0)
+        c_params.seed = int(self.config.seed if self.config.seed is not None else 0)
+        c_params.temperature = float(self.config.temperature if self.config.temperature is not None else 0.7)
+        c_params.top_p = float(self.config.top_p if self.config.top_p is not None else 0.95)
+        c_params.min_p = float(self.config.min_p if self.config.min_p is not None else 0.05)
+        c_params.typical_p = float(self.config.typical_p if self.config.typical_p is not None else 1.0)
+        c_params.repeat_penalty = float(self.config.repeat_penalty if self.config.repeat_penalty is not None else 1.15)
+        c_params.frequency_penalty = float(self.config.frequency_penalty if self.config.frequency_penalty is not None else 0.0)
+        c_params.presence_penalty = float(self.config.presence_penalty if self.config.presence_penalty is not None else 0.0)
+        c_params.flash_attn = bool(self.config.flash_attn)
+        c_params.verbose = bool(self.config.verbose)
 
         self._ctx = self._lib.bitnet_init(ctypes.byref(c_params))
+        if not self._ctx and c_params.n_gpu_layers > 0 and getattr(self, "_requested_device", "auto") == "auto":
+            import sys
+            sys.stdout.write("[INFO] [termux-bitnet] Vulkan GPU initialization failed. "
+                             "Falling back to ARM64 NEON CPU backend.\n")
+            sys.stdout.flush()
+            self.config.device = "cpu"
+            self.config.n_gpu_layers = 0
+            c_params.n_gpu_layers = 0
+            self._ctx = self._lib.bitnet_init(ctypes.byref(c_params))
+
         if not self._ctx:
             raise RuntimeError(
                 f"[termux-bitnet] Failed to initialize native model context from '{self.config.model_path}'. "
@@ -208,23 +280,35 @@ class BitNetEngine:
 
     def _find_bitnet_cli_binary(self) -> Optional[str]:
         import shutil
+        termux_prefix = os.environ.get("PREFIX", "/data/data/com.termux/files/usr")
         candidates = [
-            os.path.expanduser("~/BitNet_ms/3rdparty/llama.cpp/build/bin/llama-cli"),
-            os.path.expanduser("~/.local/bin/llama-cli"),
-            "/data/data/com.termux/files/usr/bin/llama-cli",
+            shutil.which("termux-bitnet-cli"),
+            os.path.join(termux_prefix, "bin", "termux-bitnet-cli"),
+            "/data/data/com.termux/files/usr/bin/termux-bitnet-cli",
+            os.path.expanduser("~/.local/bin/termux-bitnet-cli"),
             shutil.which("llama-cli"),
+            os.path.join(termux_prefix, "bin", "llama-cli"),
+            "/data/data/com.termux/files/usr/bin/llama-cli",
+            os.path.expanduser("~/.local/bin/llama-cli"),
         ]
         for c in candidates:
             if c and os.path.isfile(c) and os.access(c, os.X_OK):
                 return c
         return None
 
-    def generate_stream(self, prompt: str, max_tokens: int = 128) -> Generator[str, None, None]:
+    def generate_stream(self, prompt: str, max_tokens: Optional[int] = None, **kwargs: Any) -> Generator[str, None, None]:
         """Stream generation tokens produced directly by the BitNet neural network."""
         if not prompt or not prompt.strip():
             raise ValueError("[termux-bitnet] Prompt cannot be empty. Please provide a valid prompt string.")
 
-        safe_max_tokens = max(1, min(int(max_tokens), 8192))
+        target_max_tokens = self.config.n_predict if max_tokens is None else max_tokens
+        safe_max_tokens = max(1, min(int(target_max_tokens), 8192))
+
+        # Dynamically apply parameter overrides if supplied
+        for k, v in kwargs.items():
+            if hasattr(self.config, k) and v is not None:
+                setattr(self.config, k, v)
+
         cli_bin = self._find_bitnet_cli_binary()
         has_valid_model = bool(self.config.model_path and os.path.isfile(self.config.model_path))
 
@@ -253,32 +337,62 @@ class BitNetEngine:
             "-n", str(max_tokens),
             "-t", str(self.config.n_threads),
             "-c", str(self.config.n_ctx if self.config.n_ctx > 0 else 512),
+            "-b", str(self.config.n_batch if self.config.n_batch > 0 else 512),
+            "-ub", str(self.config.n_ubatch if self.config.n_ubatch > 0 else 512),
             "--temp", str(self.config.temperature),
             "--top-p", str(self.config.top_p),
             "--top-k", str(self.config.top_k),
+            "--min-p", str(self.config.min_p),
+            "--typical", str(self.config.typical_p),
             "--repeat-penalty", str(self.config.repeat_penalty),
             "--repeat-last-n", str(self.config.repeat_last_n),
+            "--freq-penalty", str(self.config.frequency_penalty),
+            "--presence-penalty", str(self.config.presence_penalty),
             "--simple-io",
             "--no-warmup",
         ]
+        if self.config.seed != 0:
+            cmd.extend(["-s", str(self.config.seed)])
         if self.config.n_gpu_layers > 0:
             cmd.extend(["-ngl", str(self.config.n_gpu_layers)])
+        if self.config.device in ("vulkan", "gpu"):
+            cmd.extend(["--device", "vulkan"])
+        if self.config.flash_attn:
+            cmd.append("-fa")
+        if self.config.system_prompt:
+            cmd.extend(["--system-prompt", self.config.system_prompt])
+        if self.config.stop_tokens:
+            for st in self.config.stop_tokens.split(","):
+                st = st.strip()
+                if st:
+                    cmd.extend(["-r", st])
+        if self.config.verbose:
+            cmd.append("--verbose")
 
         env = os.environ.copy()
         env["LANG"] = "C.UTF-8"
         env["LC_ALL"] = "C.UTF-8"
         lib_dir = os.path.dirname(cli_bin)
+        get_vulkan_env_fn = None
         try:
-            from ameva_runtime.vulkan.adapters import get_vulkan_env
-            env = get_vulkan_env(env)
-            if lib_dir and lib_dir not in env["LD_LIBRARY_PATH"]:
-                env["LD_LIBRARY_PATH"] = f"{lib_dir}:{env['LD_LIBRARY_PATH']}"
+            from ameva_runtime.adapters import get_vulkan_env as get_vulkan_env_fn
         except ImportError:
+            try:
+                from ameva_runtime.vulkan.adapters import get_vulkan_env as get_vulkan_env_fn
+            except ImportError:
+                get_vulkan_env_fn = None
+
+        if get_vulkan_env_fn:
+            env = get_vulkan_env_fn(env)
+            if lib_dir and lib_dir not in env.get("LD_LIBRARY_PATH", ""):
+                env["LD_LIBRARY_PATH"] = f"{lib_dir}:{env.get('LD_LIBRARY_PATH', '')}"
+        else:
             env["LD_LIBRARY_PATH"] = f"{lib_dir}:{env.get('LD_LIBRARY_PATH', '')}"
 
         proc = None
         has_yielded = False
         clean_tokens = []
+        prompt_token_count = self.count_tokens(prompt)
         t0 = time.time()
 
         try:
@@ -333,6 +447,7 @@ class BitNetEngine:
             token_count = self.count_tokens(full_text)
             tps = token_count / elapsed_sec
             self._last_metrics = GenerationMetrics(
+                prompt_tokens=prompt_token_count,
                 generated_tokens=token_count,
                 eval_time_ms=elapsed_sec * 1000.0,
                 tokens_per_second=tps,
@@ -361,9 +476,11 @@ class BitNetEngine:
 
 
     def _generate_stream_native(self, prompt: str, max_tokens: int) -> Generator[str, None, None]:
-        """Execute inference stream via in-process C ABI shared library."""
+        """Execute inference stream via in-process C ABI shared library with real-time token yielding."""
         import time
         import unicodedata
+        import queue
+        import threading
 
         if not self._lib:
             raise BitNetEngineNotFound("Native BitNet C++ runtime library is not loaded.")
@@ -371,33 +488,99 @@ class BitNetEngine:
         if not self._ctx:
             self._init_context()
 
-        chunks: List[str] = []
+        prompt_token_count = self.count_tokens(prompt) if self._ctx else len(prompt.split())
 
-        def _callback(token_str: bytes, token_id: int, user_data: int) -> bool:
-            if token_str:
-                text = token_str.decode("utf-8", errors="ignore")
-                chunks.append(text)
-            return True
+        # Synchronize dynamic hyperparameters into active C context
+        if self._lib and hasattr(self._lib, "bitnet_set_params") and self._ctx:
+            c_params = CBitNetParams()
+            c_params.model_path = self._c_model_path
+            c_params.system_prompt = self._c_system_prompt
+            c_params.stop_tokens = self._c_stop_tokens
+            c_params.n_threads = int(self.config.n_threads if self.config.n_threads is not None else 4)
+            c_params.n_ctx = int(self.config.n_ctx if self.config.n_ctx is not None else 2048)
+            c_params.n_batch = int(self.config.n_batch if self.config.n_batch is not None else 512)
+            c_params.n_ubatch = int(self.config.n_ubatch if self.config.n_ubatch is not None else 512)
+            c_params.n_predict = int(max_tokens)
+            c_params.top_k = int(self.config.top_k if self.config.top_k is not None else 40)
+            c_params.repeat_last_n = int(self.config.repeat_last_n if self.config.repeat_last_n is not None else 64)
+            c_params.n_gpu_layers = int(self.config.n_gpu_layers if self.config.n_gpu_layers is not None else 0)
+            c_params.seed = int(self.config.seed if self.config.seed is not None else 0)
+            c_params.temperature = float(self.config.temperature if self.config.temperature is not None else 0.7)
+            c_params.top_p = float(self.config.top_p if self.config.top_p is not None else 0.95)
+            c_params.min_p = float(self.config.min_p if self.config.min_p is not None else 0.05)
+            c_params.typical_p = float(self.config.typical_p if self.config.typical_p is not None else 1.0)
+            c_params.repeat_penalty = float(self.config.repeat_penalty if self.config.repeat_penalty is not None else 1.15)
+            c_params.frequency_penalty = float(self.config.frequency_penalty if self.config.frequency_penalty is not None else 0.0)
+            c_params.presence_penalty = float(self.config.presence_penalty if self.config.presence_penalty is not None else 0.0)
+            c_params.flash_attn = bool(self.config.flash_attn)
+            c_params.verbose = bool(self.config.verbose)
+            self._lib.bitnet_set_params(self._ctx, ctypes.byref(c_params))
 
         safe_prompt = unicodedata.normalize("NFC", prompt).encode("utf-8", errors="replace")
+        token_q: queue.Queue = queue.Queue()
+        stop_sentinel = object()
+        worker_error: List[Exception] = []
+        abort_event = threading.Event()
+        gen_token_count = 0
+
+        def _callback(token_str: bytes, token_id: int, user_data: int) -> bool:
+            if abort_event.is_set():
+                return False
+            if token_str:
+                text = token_str.decode("utf-8", errors="ignore")
+                token_q.put(text)
+            return True
+
         cb = STREAM_CB_TYPE(_callback)
+        self._active_stream_cb = cb  # Retain reference to prevent ctypes GC deallocation
 
         t0 = time.time()
-        self._lib.bitnet_generate_stream(self._ctx, safe_prompt, max_tokens, cb, None)
-        t1 = time.time()
 
+        def _worker():
+            try:
+                self._lib.bitnet_generate_stream(self._ctx, safe_prompt, max_tokens, cb, None)
+            except Exception as ex:
+                worker_error.append(ex)
+            finally:
+                token_q.put(stop_sentinel)
+
+        worker_thread = threading.Thread(target=_worker, daemon=True)
+        worker_thread.start()
+
+        try:
+            while True:
+                item = token_q.get()
+                if item is stop_sentinel:
+                    break
+                gen_token_count += 1
+                yield item
+        finally:
+            abort_event.set()
+            worker_thread.join(timeout=2.0)
+            self._active_stream_cb = None
+
+        if worker_error:
+            raise RuntimeError(f"[termux-bitnet] Native inference stream error: {worker_error[0]}") from worker_error[0]
+
+        t1 = time.time()
         elapsed_sec = max(t1 - t0, 0.001)
-        gen_token_count = max(len(chunks), 1)
-        tps = gen_token_count / elapsed_sec
+        safe_count = max(gen_token_count, 1)
+        tps = safe_count / elapsed_sec
+
+        prompt_eval_ms = ctypes.c_double(0.0)
+        eval_ms = ctypes.c_double(0.0)
+        c_tps = ctypes.c_double(0.0)
+        if self._lib and hasattr(self._lib, "bitnet_get_perf_stats") and self._ctx:
+            self._lib.bitnet_get_perf_stats(self._ctx, ctypes.byref(prompt_eval_ms), ctypes.byref(eval_ms), ctypes.byref(c_tps))
+
         self._last_metrics = GenerationMetrics(
-            generated_tokens=gen_token_count,
-            eval_time_ms=elapsed_sec * 1000.0,
-            tokens_per_second=tps,
+            prompt_tokens=prompt_token_count,
+            generated_tokens=safe_count,
+            prompt_eval_time_ms=prompt_eval_ms.value if prompt_eval_ms.value > 0 else 0.0,
+            eval_time_ms=eval_ms.value if eval_ms.value > 0 else elapsed_sec * 1000.0,
+            tokens_per_second=c_tps.value if c_tps.value > 0 else tps,
             total_time_ms=elapsed_sec * 1000.0,
         )
-
-        for chunk in chunks:
-            yield chunk
 
     def tokenize(self, text: str) -> List[int]:
         """Tokenize input text into token IDs using native C++ vocabulary."""
@@ -422,7 +605,12 @@ class BitNetEngine:
         safe_text = unicodedata.normalize("NFC", text).encode("utf-8", errors="replace")
         max_tokens = len(safe_text) * 2 + 128
         buf = (ctypes.c_int32 * max_tokens)()
-        count = self._lib.bitnet_tokenize(self._ctx, safe_text, buf, max_tokens)
+        raw_count = self._lib.bitnet_tokenize(self._ctx, safe_text, buf, max_tokens)
+        try:
+            count = int(raw_count)
+        except (TypeError, ValueError):
+            return [1] * max(1, len(text.split()))
+
         if count < 0:
             raise RuntimeError(
                 f"[termux-bitnet] [FAIL-FAST] Native BPE tokenization failed with error code {count} for text: '{text[:40]}...'"
@@ -436,9 +624,33 @@ class BitNetEngine:
         tokens = self.tokenize(text)
         return max(len(tokens), 1)
 
-    def generate(self, prompt: str, max_tokens: int = 128) -> str:
+    def token_to_str(self, token: int) -> str:
+        """Convert a single token ID into its UTF-8 string representation."""
+        if not self._lib:
+            raise BitNetEngineNotFound(
+                "[termux-bitnet] [FAIL-FAST] Native C ABI library is not loaded. Cannot convert token without native engine."
+            )
+        if not self._ctx and self.config.model_path and os.path.isfile(self.config.model_path):
+            self._init_context()
+        if not self._ctx:
+            raise RuntimeError(
+                "[termux-bitnet] [FAIL-FAST] Engine context is uninitialized. A valid model_path is required for token conversion."
+            )
+        buf = ctypes.create_string_buffer(512)
+        n = self._lib.bitnet_token_to_str(self._ctx, int(token), buf, 512)
+        if n <= 0:
+            return ""
+        return buf.value.decode("utf-8", errors="replace")
+
+    def detokenize(self, tokens: List[int]) -> str:
+        """Decode a sequence of token IDs back into a UTF-8 text string."""
+        if not tokens:
+            return ""
+        return "".join(self.token_to_str(tok) for tok in tokens)
+
+    def generate(self, prompt: str, max_tokens: Optional[int] = None, **kwargs: Any) -> str:
         """Generate full text completion."""
-        return "".join(list(self.generate_stream(prompt, max_tokens)))
+        return "".join(list(self.generate_stream(prompt, max_tokens=max_tokens, **kwargs)))
 
     def get_last_metrics(self) -> GenerationMetrics:
         """Retrieve telemetry metrics of the most recent evaluation."""
@@ -446,13 +658,20 @@ class BitNetEngine:
             p_eval = ctypes.c_double()
             eval_ms = ctypes.c_double()
             tps = ctypes.c_double()
-            self._lib.bitnet_get_perf_stats(self._ctx, ctypes.byref(p_eval), ctypes.byref(eval_ms), ctypes.byref(tps))
-            return GenerationMetrics(
-                prompt_eval_time_ms=p_eval.value,
-                eval_time_ms=eval_ms.value,
-                tokens_per_second=tps.value,
-                total_time_ms=p_eval.value + eval_ms.value,
-            )
+            try:
+                self._lib.bitnet_get_perf_stats(self._ctx, ctypes.byref(p_eval), ctypes.byref(eval_ms), ctypes.byref(tps))
+                c_tps = tps.value if tps.value > 0.0 else self._last_metrics.tokens_per_second
+                c_eval = eval_ms.value if eval_ms.value > 0.0 else self._last_metrics.eval_time_ms
+                return GenerationMetrics(
+                    prompt_tokens=self._last_metrics.prompt_tokens,
+                    generated_tokens=self._last_metrics.generated_tokens,
+                    prompt_eval_time_ms=p_eval.value,
+                    eval_time_ms=c_eval,
+                    tokens_per_second=c_tps,
+                    total_time_ms=p_eval.value + c_eval,
+                )
+            except Exception:
+                pass
         return self._last_metrics
 
     def close(self) -> None:

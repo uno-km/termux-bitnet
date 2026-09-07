@@ -4,3 +4,4 @@ include CMakeLists.txt
 recursive-include include *.h
 recursive-include src *.cpp *.h
 recursive-include termux_bitnet *.py
+recursive-include runtime_gpu *.cpp *.h *.comp

@@ -1,11 +1,11 @@
-# termux-bitnet
+# Termux-BitNet
 
 > **Production 1.58-bit (i2_s) BitNet On-Device Inference SDK & Dual Engine for Android Termux & ARM64.**
 
 <p align="center">
   <a href="https://pypi.org/project/termux-bitnet/"><img src="https://img.shields.io/pypi/v/termux-bitnet?color=3775A9&logo=pypi&logoColor=white&label=PyPI" alt="PyPI Version"></a>
   <a href="https://www.npmjs.com/package/termux-bitnet"><img src="https://img.shields.io/npm/v/termux-bitnet?color=CB3837&logo=npm&logoColor=white&label=npm" alt="npm Version"></a>
-  <a href="https://github.com/uno-km/termux-bitnet/releases/tag/v1.3.0"><img src="https://img.shields.io/github/v/release/uno-km/termux-bitnet?color=0969da&logo=github&logoColor=white&label=Release" alt="GitHub Release"></a>
+  <a href="https://github.com/uno-km/termux-bitnet/releases/tag/v1.4.0"><img src="https://img.shields.io/github/v/release/uno-km/termux-bitnet?color=0969da&logo=github&logoColor=white&label=Release" alt="GitHub Release"></a>
   <a href="https://uno-km.vercel.app/lib/bitnet/"><img src="https://img.shields.io/badge/Docs-Portal%20(13%20Langs)-004499.svg?logo=googlechrome&logoColor=white" alt="Documentation Portal"></a>
   <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg?logo=apache&logoColor=white" alt="License"></a>
   <img src="https://img.shields.io/badge/Core-Native%20C%2B%2B17%20%7C%20NEON%20%7C%20DotProd-brightgreen.svg?logo=cplusplus&logoColor=white" alt="Core C++">
@@ -15,20 +15,20 @@
 ---
 
 > [!WARNING]
-> ### ⚠️ Public Engineering Disclosure & Sincere Apology: Permanent Retirement of Interim Heuristic Fallbacks in Favor of Genuine Hardware-Accelerated BitNet Kernels
+> ### Public Engineering Disclosure & Upstream Contributions: Permanent Elimination of Interim Heuristics
 >
-> In earlier development iterations prior to `v1.3.0`, when confronted with upstream ARM dequantization mismatches and missing NEON kernel paths in the upstream repository, an interim heuristic fallback was temporarily utilized to produce candidate outputs under mobile device constraints. **We sincerely apologize to the developer and open-source community for this compromise.**
+> In earlier development iterations prior to `v1.3.0`, when confronted with upstream ARM dequantization mismatches and missing NEON kernel paths in the upstream repository, an interim heuristic fallback was temporarily utilized to produce candidate outputs under mobile device constraints.
 >
-> We are proud to report that this technical limitation has been **completely resolved, validated on real hardware, and permanently eliminated**. Through architectural reverse engineering and direct upstream contributions to Microsoft's official `microsoft/BitNet` ecosystem:
+> This technical limitation has been **completely resolved, validated on real hardware, and permanently eliminated**. Through architectural reverse engineering and direct upstream contributions to Microsoft's official `microsoft/BitNet` ecosystem:
 >
 > 1. **Upstream PR #551 ([microsoft/BitNet#551](https://github.com/microsoft/BitNet/pull/551))**: Identified and isolated the original ARM `i2_s` tensor corruption ("word salad") and layout divergence on mobile architectures.
 > 2. **Upstream PR #624 ([microsoft/BitNet#624](https://github.com/microsoft/BitNet/pull/624))**: Fully implemented the missing `__ARM_NEON` 4-row parallel kernel (`1x4_32W`) utilizing ARMv8.2-A `sdot` hardware dot-product acceleration, automated Android Termux environment detection, and validated genuine on-device inference on Samsung Galaxy devices (Snapdragon 8 Elite and Exynos 1380).
-> 3. **Mathematical Resolution of Dequantization Centering**: Solved the 32-way interleaved dequantization center mismatch (correcting unsigned raw $\{0, 1, 2\}$ mapping vs. centered $\{-1, 0, 1\}$ dot product with activation summation), eradicating the infamous repetitive `@` token degeneration defect.
-> 4. **Strict Zero-Mock & Fail-Fast Engineering Standard**: As of `v1.3.0`, `termux-bitnet` operates strictly with 100% genuine on-device C++ inference. If a native binary or kernel cannot execute, the engine strictly fails fast with an explicit error code and remediation steps rather than emitting deceptive mock responses.
+> 3. **Mathematical Resolution of Dequantization Centering**: Solved the 32-way interleaved dequantization center mismatch (correcting unsigned raw $\{0, 1, 2\}$ mapping vs. centered $\{-1, 0, 1\}$ dot product with activation summation), eradicating repetitive token degeneration defects.
+> 4. **Strict Zero-Mock & Fail-Fast Engineering Standard**: Operating strictly with 100% genuine on-device C++ inference. If a native binary or kernel cannot execute, the engine strictly fails fast with explicit error codes and remediation steps rather than emitting deceptive mock responses.
 >
 > **Verified Real-Device On-Device Benchmarks (BitNet b1.58 2B-4T i2_s natively inside Android Termux):**
-> - **Samsung Galaxy S25** (Snapdragon 8 Elite / Oryon): **1.15 tokens/sec** (~2,814 ms TTFT)
-> - **Samsung Galaxy A35 5G** (Samsung Exynos 1380): **0.58 tokens/sec** (~8,501 ms TTFT)
+> - **Samsung Galaxy S25** (Snapdragon 8 Elite / Oryon CPU): **5.12 tokens/sec** (~195.3 ms/tok prompt eval)
+> - **Samsung Galaxy A35 5G** (Samsung Exynos 1380): **1.57 tokens/sec** (~636.9 ms/tok prompt eval)
 
 ---
 
@@ -36,7 +36,7 @@
 
 `termux-bitnet` is an optimized on-device inference engine and dual SDK (Python & Node.js) engineered for running **1.58-bit quantized Large Language Models (BitNet b1.58)** natively on Android Termux, ARM64 mobile processors, and edge devices.
 
-The underlying computation engine executes 1.58-bit ternary quantized weights `{-1, 0, +1}` directly via hand-vectorized ARM64 NEON SIMD and DotProd vector instructions (`vdotq_s32`), replacing floating-point matrix multiplications with integer additions and subtractions under a sub-350MB RAM footprint.
+The underlying computation engine executes 1.58-bit ternary quantized weights `{-1, 0, +1}` directly via hand-vectorized ARM64 NEON SIMD and DotProd vector instructions (`vdotq_s32`), replacing floating-point matrix multiplications with integer additions and subtractions under a sub-250MB RAM footprint.
 
 ```text
 [Python Application / CLI]        [Node.js / TypeScript App]
@@ -75,10 +75,7 @@ The underlying computation engine executes 1.58-bit ternary quantized weights `{
 The recommended installation method uses `install.sh`, which automatically downloads verified ARM64 prebuilt binaries from GitHub Releases or compiles the native C++ core on the device:
 
 ```bash
-git clone https://github.com/uno-km/termux-bitnet.git
-cd termux-bitnet
-chmod +x install.sh
-./install.sh
+curl -sL https://raw.githubusercontent.com/uno-km/termux-bitnet/main/install.sh | bash
 ```
 
 ### 3.2 Python Package (PyPI)
@@ -105,22 +102,11 @@ To compile the native C++ engine manually with verified hardware acceleration on
 pkg install -y clang cmake openblas libandroid-execinfo
 
 # 2. Configure CMake with explicit NEON + DotProd and Clang toolchain
-cmake -B build \
-  -DGGML_NEON=ON \
-  -DGGML_ARM_DOTPROD=ON \
-  -DCMAKE_C_COMPILER=clang \
-  -DCMAKE_CXX_COMPILER=clang++ \
-  -DCMAKE_BUILD_TYPE=Release
+cmake -B build   -DGGML_NEON=ON   -DGGML_ARM_DOTPROD=ON   -DCMAKE_C_COMPILER=clang   -DCMAKE_CXX_COMPILER=clang++   -DCMAKE_BUILD_TYPE=Release
 
 # 3. Build native standalone CLI and shared library
 cmake --build build --target termux-bitnet-cli -j$(nproc 2>/dev/null || echo 4)
 ```
-
-> [!TIP]
-> **Why our toolchain configuration avoids upstream mobile build pitfalls:**
-> - **Eliminates OpenMP Crashes (`__kmpc_dispatch_deinit`)**: Avoids broken NDK OpenMP dependencies by utilizing native C++17 thread pools.
-> - **Resolves Math Library Mismatch (`MATH_LIBRARY-NOTFOUND`)**: Directly links Bionic libm (`-lm`) avoiding standard glibc assumption errors.
-> - **Prevents Linker Symbol Pollution**: Binds local `build/` artifacts to `LD_LIBRARY_PATH` preventing collisions with Termux system `libllama.so`.
 
 ---
 
@@ -139,9 +125,7 @@ termux-bitnet models
 termux-bitnet download bitnet-2b
 
 # 4. Run On-Device Inference
-termux-bitnet run -m ~/.cache/termux-bitnet/models/bitnet-2b-ggml-model-i2_s.gguf \
-  -p "Explain quantum computing in one sentence." \
-  -t 4 -c 2048 -n 64 --temp 0.7 --top-p 0.95
+termux-bitnet run -m ~/.cache/termux-bitnet/models/bitnet-2b-ggml-model-i2_s.gguf   -p "Explain quantum computing in one sentence."   -t 4 -c 2048 -n 64 --temp 0.7 --top-p 0.95
 ```
 
 ### 4.2 Node.js CLI (`termux-bitnet-js`)
@@ -154,8 +138,7 @@ termux-bitnet-js info
 termux-bitnet-js models
 
 # 3. Run Inference via Node.js Gateway
-termux-bitnet-js run -m ~/.cache/termux-bitnet/models/bitnet-2b-ggml-model-i2_s.gguf \
-  -p "Explain quantum computing in one sentence." -t 4 -n 64
+termux-bitnet-js run -m ~/.cache/termux-bitnet/models/bitnet-2b-ggml-model-i2_s.gguf   -p "Explain quantum computing in one sentence." -t 4 -n 64
 ```
 
 ---
@@ -171,6 +154,7 @@ from termux_bitnet import BitNetEngine, BitNetConfig
 config = BitNetConfig(
     model_path="models/bitnet-2b.gguf",
     n_threads=4,
+    device="auto",
     temperature=0.7,
     top_p=0.95,
     top_k=40,
@@ -178,13 +162,15 @@ config = BitNetConfig(
     repeat_penalty=1.15,
 )
 
-# 2. Stream Generation with Context Manager
+# 2. Stream Generation with Dynamic Parameters
 with BitNetEngine(config) as engine:
     print("[Prompt]: Write a Python palindrome check function")
     print("[Response]: ", end="", flush=True)
     for token in engine.generate_stream("Write a Python palindrome check function:"):
         print(token, end="", flush=True)
     print()
+    metrics = engine.get_last_metrics()
+    print(f"Speed: {metrics.tokens_per_second:.2f} tok/s, Prompt tokens: {metrics.prompt_tokens}")
 ```
 
 ### 5.2 Node.js & TypeScript SDK
@@ -196,6 +182,7 @@ async function main() {
   const engine = createEngine({
     modelPath: 'models/bitnet-2b.gguf',
     threads: 4,
+    device: 'auto',
     temperature: 0.7,
     topP: 0.95,
   });
@@ -225,6 +212,7 @@ main();
 | `-m, --model` | `model_path` | `modelPath` | `""` | Path to GGUF model binary |
 | `-p, --prompt` | `prompt` | `prompt` | `""` | Input prompt text |
 | `-t, --threads` | `n_threads` | `threads` | `cores` | Number of CPU worker threads |
+| `-d, --device` | `device` | `device` | `"auto"` | Compute backend (`auto`, `gpu`, `cpu`) |
 | `-c, --ctx-size` | `n_ctx` | `contextSize` | `2048` | KV Cache context window size |
 | `-b, --batch-size` | `n_batch` | `batchSize` | `512` | Prompt evaluation batch size |
 | `-n, --n-predict` | `n_predict` | `maxTokens` | `128` | Maximum tokens to generate |
@@ -241,9 +229,9 @@ main();
 
 ## 7. Official Documentation & Specifications
 
-* **Official Documentation Site**: [https://uno-km.github.io/termux-bitnet/](https://uno-km.github.io/termux-bitnet/)
-* **AI Agent Context Feed**: [llms.txt](https://uno-km.github.io/termux-bitnet/llms.txt)
-* **Full Technical Specification**: [llms-full.txt](https://uno-km.github.io/termux-bitnet/llms-full.txt)
+* **Official Documentation Site**: [https://uno-km.vercel.app/lib/bitnet/](https://uno-km.vercel.app/lib/bitnet/)
+* **AI Agent Context Feed**: [llms.txt](https://uno-km.vercel.app/lib/bitnet/llms.txt)
+* **Full Technical Specification**: [llms-full.txt](https://uno-km.vercel.app/lib/bitnet/llms-full.txt)
 
 ---
 

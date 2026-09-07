@@ -105,9 +105,12 @@ def download_model(model_name: str = "bitnet-2b", output_dir: Optional[Path] = N
     url = model_info["url"]
     print(f"[termux-bitnet] Downloading {model_info['description']}...")
     print(f"[termux-bitnet] Remote URL : {url}")
-    print(f"[termux-bitnet] Target Path: {target_path}")
-
-    headers = {"User-Agent": "termux-bitnet/0.1.0 (Android; ARM64)"}
+    try:
+        from termux_bitnet import __version__
+        ua_version = __version__
+    except Exception:
+        ua_version = "1.4.0"
+    headers = {"User-Agent": f"termux-bitnet/{ua_version} (Android; ARM64)"}
     downloaded = 0
     mode = "wb"
 

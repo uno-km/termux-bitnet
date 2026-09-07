@@ -115,6 +115,10 @@ class OpenAIHandler(BaseHTTPRequestHandler):
 
         stream = data.get("stream", False)
         max_tokens = data.get("max_tokens", 256)
+        extra_kwargs = {}
+        for param in ("temperature", "top_p", "top_k", "min_p", "repeat_penalty", "seed"):
+            if param in data and data[param] is not None:
+                extra_kwargs[param] = data[param]
 
         # Reconstruct full conversation prompt
         prompt_lines = []
@@ -161,7 +165,7 @@ class OpenAIHandler(BaseHTTPRequestHandler):
                     try:
                         stream_gen = None
                         with ENGINE_LOCK:
-                            stream_gen = OpenAIHandler.engine.generate_stream(prompt, max_tokens=max_tokens)
+                            stream_gen = OpenAIHandler.engine.generate_stream(prompt, max_tokens=max_tokens, **extra_kwargs)
 
                         while not cancel_event.is_set():
                             chunk = None
@@ -248,7 +252,7 @@ class OpenAIHandler(BaseHTTPRequestHandler):
         else:
             try:
                 with ENGINE_LOCK:
-                    full_response = OpenAIHandler.engine.generate(prompt, max_tokens=max_tokens)
+                    full_response = OpenAIHandler.engine.generate(prompt, max_tokens=max_tokens, **extra_kwargs)
                 self._set_headers(200)
                 
                 # Accurate token metrics via engine.count_tokens
@@ -296,26 +300,151 @@ class OpenAIHandler(BaseHTTPRequestHandler):
             )
             return
 
+        stream = data.get("stream", False)
         max_tokens = data.get("max_tokens", 256)
-        try:
-            with ENGINE_LOCK:
-                full_response = OpenAIHandler.engine.generate(prompt, max_tokens=max_tokens)
-            resp_obj = {
-                "id": f"cmpl-{uuid.uuid4().hex[:12]}",
-                "object": "text_completion",
-                "created": int(time.time()),
-                "model": "bitnet-b1.58-2b-4t",
-                "choices": [{"text": full_response, "index": 0, "finish_reason": "stop"}]
-            }
-            self._set_headers(200)
-            self.wfile.write(json.dumps(resp_obj).encode("utf-8"))
-        except Exception as e:
-            self._send_json_error(500, f"[termux-bitnet ERROR] Inference execution failed: {e}", "internal_error")
+        extra_kwargs = {}
+        for param in ("temperature", "top_p", "top_k", "min_p", "repeat_penalty", "seed"):
+            if param in data and data[param] is not None:
+                extra_kwargs[param] = data[param]
+
+        req_id = f"cmpl-{uuid.uuid4().hex[:12]}"
+        created = int(time.time())
+
+        if stream:
+            headers_sent = False
+            try:
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Connection", "keep-alive")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                headers_sent = True
+
+                import queue
+
+                token_queue = queue.Queue(maxsize=32)
+                cancel_event = threading.Event()
+                worker_done = threading.Event()
+                worker_err = []
+
+                def _stream_producer():
+                    try:
+                        stream_gen = None
+                        with ENGINE_LOCK:
+                            stream_gen = OpenAIHandler.engine.generate_stream(prompt, max_tokens=max_tokens, **extra_kwargs)
+
+                        while not cancel_event.is_set():
+                            chunk = None
+                            with ENGINE_LOCK:
+                                try:
+                                    chunk = next(stream_gen)
+                                except StopIteration:
+                                    break
+                                except Exception as ge:
+                                    worker_err.append(ge)
+                                    break
+
+                            if chunk is not None:
+                                while not cancel_event.is_set():
+                                    try:
+                                        token_queue.put(chunk, timeout=0.05)
+                                        break
+                                    except queue.Full:
+                                        continue
+                    except Exception as pe:
+                        worker_err.append(pe)
+                    finally:
+                        worker_done.set()
+
+                prod_thread = threading.Thread(target=_stream_producer, daemon=True)
+                prod_thread.start()
+
+                try:
+                    while True:
+                        try:
+                            chunk = token_queue.get(timeout=0.05)
+                            chunk_obj = {
+                                "id": req_id,
+                                "object": "text_completion",
+                                "created": created,
+                                "model": "bitnet-b1.58-2b-4t",
+                                "choices": [{"text": chunk, "index": 0, "finish_reason": None}],
+                            }
+                            self.wfile.write(f"data: {json.dumps(chunk_obj)}\n\n".encode("utf-8"))
+                            self.wfile.flush()
+                        except queue.Empty:
+                            if worker_done.is_set():
+                                break
+
+                    final_chunk = {
+                        "id": req_id,
+                        "object": "text_completion",
+                        "created": created,
+                        "model": "bitnet-b1.58-2b-4t",
+                        "choices": [{"text": "", "index": 0, "finish_reason": "stop"}],
+                    }
+                    self.wfile.write(f"data: {json.dumps(final_chunk)}\n\n".encode("utf-8"))
+                    self.wfile.write(b"data: [DONE]\n\n")
+                    self.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError):
+                    cancel_event.set()
+                finally:
+                    cancel_event.set()
+                    prod_thread.join(timeout=2.0)
+            except Exception as e:
+                if not headers_sent:
+                    self._send_json_error(500, f"[termux-bitnet ERROR] Streaming failure: {e}", "internal_error")
+                else:
+                    try:
+                        err_chunk = {"error": {"message": str(e), "type": "internal_error", "code": 500}}
+                        self.wfile.write(f"data: {json.dumps(err_chunk)}\n\n".encode("utf-8"))
+                        self.wfile.flush()
+                    except (BrokenPipeError, ConnectionResetError, OSError):
+                        pass
+        else:
+            try:
+                with ENGINE_LOCK:
+                    full_response = OpenAIHandler.engine.generate(prompt, max_tokens=max_tokens, **extra_kwargs)
+                resp_obj = {
+                    "id": req_id,
+                    "object": "text_completion",
+                    "created": created,
+                    "model": "bitnet-b1.58-2b-4t",
+                    "choices": [{"text": full_response, "index": 0, "finish_reason": "stop"}]
+                }
+                self._set_headers(200)
+                self.wfile.write(json.dumps(resp_obj).encode("utf-8"))
+            except Exception as e:
+                self._send_json_error(500, f"[termux-bitnet ERROR] Inference execution failed: {e}", "internal_error")
 
 
-def run_server(host: str = "0.0.0.0", port: int = 8080, model_path: str = ""):
+def run_server(
+    host: str = "0.0.0.0",
+    port: int = 8080,
+    model_path: str = "",
+    device: str = "auto",
+    n_threads: int = 4,
+    n_ctx: int = 2048,
+    n_batch: int = 512,
+    n_ubatch: int = 512,
+    n_gpu_layers: int = 0,
+    flash_attn: bool = False,
+    verbose: bool = False,
+    **kwargs,
+):
     """Start standalone OpenAI-compatible local API server with multi-threaded request support."""
-    config = BitNetConfig(model_path=model_path)
+    config = BitNetConfig(
+        model_path=model_path,
+        device=device,
+        n_threads=n_threads,
+        n_ctx=n_ctx,
+        n_batch=n_batch,
+        n_ubatch=n_ubatch,
+        n_gpu_layers=n_gpu_layers,
+        flash_attn=flash_attn,
+        verbose=verbose,
+    )
     engine = BitNetEngine(config)
     OpenAIHandler.engine = engine
 
@@ -324,6 +453,7 @@ def run_server(host: str = "0.0.0.0", port: int = 8080, model_path: str = ""):
 
     print("=========================================================")
     print(f"  termux-bitnet OpenAI API Server running on {host}:{port}")
+    print(f"  Backend: {config.device} (layers: {config.n_gpu_layers}) | Threads: {config.n_threads} | Context: {config.n_ctx}")
     print(f"  Concurrency: Multi-threaded (ThreadingHTTPServer + Engine Lock)")
     print(f"  Endpoints:")
     print(f"    - Health: http://{host}:{port}/health")
