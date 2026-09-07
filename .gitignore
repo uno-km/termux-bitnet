@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# In-Development GPU Accelerator Staging (Excluded until official release)
+runtime_gpu/
+
 # C / C++ build outputs
 build/
 bin/
