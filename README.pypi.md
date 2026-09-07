@@ -4,7 +4,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/termux-bitnet.svg?style=flat-square)](https://pypi.org/project/termux-bitnet/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-004499.svg?style=flat-square)](https://github.com/uno-km/termux-bitnet)
 
-> 1.58-Bit On-Device LLM Inference Engine Utilizing Device Resources with ARM64 NEON DotProd SIMD & Vulkan GPU
+> 1.58-Bit On-Device LLM Inference Engine with ARM64 NEON SIMD & Native Vulkan GPU Acceleration via AMEVA-Runtime
 
 ## Installation
 
@@ -17,11 +17,11 @@ pip install termux-bitnet
 ```python
 from termux_bitnet import BitNetEngine, BitNetConfig
 
-# 1. Initialize engine with model & thread configuration
+# 1. Initialize engine with Native Vulkan GPU acceleration via AMEVA-Runtime
 config = BitNetConfig(
     model_path="~/.cache/termux-bitnet/models/bitnet-2b-ggml-model-i2_s.gguf",
+    device="gpu",        # "gpu" (Vulkan via AMEVA-Runtime), "cpu", or "auto"
     n_threads=4,
-    device="auto",
     temperature=0.7,
     top_p=0.95
 )
@@ -39,7 +39,7 @@ with BitNetEngine(config) as engine:
 ```
 
 ## Description
-Executes 1.58-bit ternary quantized weights {-1, 0, +1} directly via hand-vectorized ARM64 NEON assembly kernels and Vulkan compute shaders, converting matrix multiplications into integer additions and subtractions under a sub-250MB RAM footprint.
+Executes 1.58-bit ternary quantized weights {-1, 0, +1} directly via hand-vectorized ARM64 NEON assembly kernels and native Vulkan compute shaders powered by AMEVA-Runtime, achieving up to 17.56 tok/s (12.58x speedup) on Qualcomm Adreno 830 and 3.47 tok/s (5.94x speedup) on ARM Mali-G68 under a sub-250MB RAM footprint.
 
 ## Documentation
 - [Official Documentation & API Reference](https://uno-km.vercel.app/lib/bitnet/)
