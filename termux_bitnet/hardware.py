@@ -20,6 +20,22 @@ class HardwareProfile:
     soc_name: str
     recommended_threads: int
 
+    @property
+    def soc_model(self) -> str:
+        return self.soc_name
+
+    @property
+    def cpu_count(self) -> int:
+        return self.cpu_cores
+
+    @property
+    def threads(self) -> int:
+        return self.recommended_threads
+
+    @property
+    def is_android(self) -> bool:
+        return self.is_termux
+
 
 # [B방안] Platform SSOT: ameva-runtime.platform 에서 공유 구현을 가져옵니다.
 try:
