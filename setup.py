@@ -48,6 +48,10 @@ class CMakeBuild(build_ext):
         try:
             subprocess.check_call(["cmake", ext.sourcedir] + cmake_args, cwd=self.build_temp)
             subprocess.check_call(["cmake", "--build", "."] + build_args, cwd=self.build_temp)
+            target = self.get_ext_fullpath(ext.name)
+            built_so = os.path.join(extdir, "libtermux_bitnet.so")
+            if os.path.exists(built_so) and not os.path.exists(target):
+                shutil.copy2(built_so, target)
         except Exception as e:
             sys.stderr.write(
                 "\n"
