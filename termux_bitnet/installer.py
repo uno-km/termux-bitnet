@@ -6,12 +6,43 @@ import shutil
 import urllib.request
 from pathlib import Path
 
-PREBUILT_LIB_URLS = [
-    "https://github.com/uno-km/termux-bitnet/releases/download/v1.0.16/libtermux_bitnet-arm64-android.so",
-    "https://github.com/uno-km/termux-bitnet/releases/download/v1.0.15/libtermux_bitnet-arm64-android.so",
-    "https://github.com/uno-km/termux-bitnet/releases/download/v1.0.14/libtermux_bitnet-arm64-android.so",
-    "https://github.com/uno-km/termux-bitnet/releases/download/v1.0.13/libtermux_bitnet-arm64-android.so",
-]
+try:
+    from . import __version__
+except Exception:
+    __version__ = "1.4.0"
+
+GITHUB_REPO = "uno-km/termux-bitnet"
+
+
+def get_candidate_library_urls() -> list[str]:
+    """Generate dynamic SSOT candidate URLs with multi-tier fallback."""
+    urls = []
+    custom_base = os.environ.get("TERMUX_BITNET_RELEASE_BASE", "").strip()
+    custom_tag = os.environ.get("TERMUX_BITNET_RELEASE_TAG", "").strip()
+
+    if custom_base:
+        base = custom_base.rstrip("/")
+        urls.append(f"{base}/libtermux_bitnet-arm64-android.so")
+        urls.append(f"{base}/libtermux_bitnet.so")
+    if custom_tag:
+        tag = custom_tag if custom_tag.startswith("v") else f"v{custom_tag}"
+        urls.append(f"https://github.com/{GITHUB_REPO}/releases/download/{tag}/libtermux_bitnet-arm64-android.so")
+        urls.append(f"https://github.com/{GITHUB_REPO}/releases/download/{tag}/libtermux_bitnet.so")
+
+    # Current version SSOT
+    current_tag = f"v{__version__}"
+    urls.append(f"https://github.com/{GITHUB_REPO}/releases/download/{current_tag}/libtermux_bitnet-arm64-android.so")
+    urls.append(f"https://github.com/{GITHUB_REPO}/releases/download/{current_tag}/libtermux_bitnet.so")
+
+    # Latest release endpoints
+    urls.append(f"https://github.com/{GITHUB_REPO}/releases/latest/download/libtermux_bitnet-arm64-android.so")
+    urls.append(f"https://github.com/{GITHUB_REPO}/releases/latest/download/libtermux_bitnet.so")
+
+    # Verified historical release fallbacks (verified HTTP 200)
+    urls.append(f"https://github.com/{GITHUB_REPO}/releases/download/v1.0.16/libtermux_bitnet-arm64-android.so")
+    urls.append(f"https://github.com/{GITHUB_REPO}/releases/download/v1.0.15/libtermux_bitnet-arm64-android.so")
+
+    return urls
 
 
 def install_prebuilt_library() -> bool:
@@ -23,19 +54,25 @@ def install_prebuilt_library() -> bool:
     print("=========================================================")
     print(f"  Target: {target_so}")
 
-    for url in PREBUILT_LIB_URLS:
+    candidate_urls = get_candidate_library_urls()
+    for url in candidate_urls:
         print(f"[*] Downloading pre-built ARM64 binary from: {url}...")
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "termux-bitnet-installer"})
+            req = urllib.request.Request(
+                url,
+                headers={"User-Agent": f"termux-bitnet-installer/{__version__} (Android; ARM64)"}
+            )
             with urllib.request.urlopen(req, timeout=15) as resp:
                 if resp.status == 200:
                     data = resp.read()
-                    if len(data) > 1024:
+                    if len(data) > 1024 and data[:4] == b"\x7fELF":
                         with open(target_so, "wb") as f:
                             f.write(data)
                         os.chmod(target_so, 0o755)
-                        print(f"Successfully provisioned native C++ engine ({len(data)} bytes).")
+                        print(f"Successfully provisioned native C++ engine ({len(data)} bytes, ELF verified).")
                         return True
+                    elif data[:4] != b"\x7fELF":
+                        print(f"[-] Downloaded file from {url} is not a valid ELF shared object.")
         except Exception as e:
             print(f"[-] Pre-built download skipped: {e}")
 

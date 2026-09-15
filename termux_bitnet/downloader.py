@@ -11,25 +11,25 @@ logger = logging.getLogger(__name__)
 # Verified 1.58-bit BitNet GGUF Model Registry
 AVAILABLE_MODELS = {
     "bitnet-2b": {
-        "repo": "city96/BitNet-b1.58-2B-GGUF",
-        "file": "bitnet-b1.58-2b-i1_s.gguf",
-        "url": "https://huggingface.co/city96/BitNet-b1.58-2B-GGUF/resolve/main/bitnet-b1.58-2b-i1_s.gguf",
-        "size_mb": 564.0,
-        "description": "BitNet b1.58 2B (i1_s quantized, 564 MB) - Ultra-Fast Mobile Default",
+        "repo": "microsoft/bitnet-b1.58-2B-4T-gguf",
+        "file": "bitnet-2b-ggml-model-i2_s.gguf",
+        "url": "https://huggingface.co/microsoft/bitnet-b1.58-2B-4T-gguf/resolve/main/ggml-model-i2_s.gguf",
+        "size_mb": 1132.8,
+        "description": "Microsoft BitNet b1.58 2B (i2_s quantized, 1.13 GB) - Official Microsoft 2B Default",
     },
     "bitnet-large": {
-        "repo": "city96/BitNet-b1.58-2B-GGUF",
-        "file": "bitnet-b1.58-2b-i1_m.gguf",
-        "url": "https://huggingface.co/city96/BitNet-b1.58-2B-GGUF/resolve/main/bitnet-b1.58-2b-i1_m.gguf",
-        "size_mb": 718.0,
-        "description": "BitNet b1.58 2B (i1_m quantized, 718 MB) - High Quality 2B Model",
+        "repo": "RichardErkhov/1bitLLM_-_bitnet_b1_58-large-gguf",
+        "file": "bitnet_b1_58-large.Q4_0.gguf",
+        "url": "https://huggingface.co/RichardErkhov/1bitLLM_-_bitnet_b1_58-large-gguf/resolve/main/bitnet_b1_58-large.Q4_0.gguf",
+        "size_mb": 404.5,
+        "description": "BitNet b1.58 Large 0.7B (Q4_0 quantized, 405 MB) - High Quality Lightweight Model",
     },
     "bitnet-3b": {
         "repo": "RichardErkhov/1bitLLM_-_bitnet_b1_58-3B-gguf",
-        "file": "bitnet_b1_58-3B.q1_3.gguf",
-        "url": "https://huggingface.co/RichardErkhov/1bitLLM_-_bitnet_b1_58-3B-gguf/resolve/main/bitnet_b1_58-3B.q1_3.gguf",
-        "size_mb": 730.4,
-        "description": "BitNet b1.58 3.3B (q1_3 quantized, 730 MB) - High-capacity Mobile Model",
+        "file": "bitnet_b1_58-3B.Q4_0.gguf",
+        "url": "https://huggingface.co/RichardErkhov/1bitLLM_-_bitnet_b1_58-3B-gguf/resolve/main/bitnet_b1_58-3B.Q4_0.gguf",
+        "size_mb": 1834.5,
+        "description": "BitNet b1.58 3.3B (Q4_0 quantized, 1.83 GB) - High precision 3B model",
     },
     "bitnet-3b-q4": {
         "repo": "RichardErkhov/1bitLLM_-_bitnet_b1_58-3B-gguf",
@@ -96,10 +96,11 @@ def download_model(model_name: str = "bitnet-2b", output_dir: Optional[Path] = N
     model_info = AVAILABLE_MODELS[clean_name]
     target_dir = Path(output_dir) if output_dir else DEFAULT_CACHE_DIR
     target_dir.mkdir(parents=True, exist_ok=True)
-    target_path = target_dir / f"{model_name}-{model_info['file']}"
+    target_path = target_dir / model_info["file"]
 
-    if not force and target_path.exists() and target_path.stat().st_size > 10 * 1024 * 1024:
-        print(f"[termux-bitnet] Model already cached at: {target_path} ({target_path.stat().st_size / (1024*1024):.1f} MB)")
+    if not force and target_path.exists() and verify_model_file(target_path):
+        sz_mb = target_path.stat().st_size / (1024 * 1024)
+        print(f"[termux-bitnet] Valid model already cached at: {target_path} ({sz_mb:.1f} MB)")
         return str(target_path)
 
     url = model_info["url"]
@@ -122,8 +123,20 @@ def download_model(model_name: str = "bitnet-2b", output_dir: Optional[Path] = N
     try:
         response = requests.get(url, headers=headers, stream=True, timeout=30)
         if response.status_code == 416:  # Range Not Satisfiable -> already complete
-            return str(target_path)
-        # Determine true write mode based on HTTP status
+            if verify_model_file(target_path):
+                return str(target_path)
+            else:
+                downloaded = 0
+                mode = "wb"
+                response = requests.get(url, headers={"User-Agent": f"termux-bitnet/{ua_version} (Android; ARM64)"}, stream=True, timeout=30)
+
+        if response.status_code not in (200, 206):
+            err_snip = response.text[:200].strip()
+            raise RuntimeError(
+                f"[ERROR: AMEVA-BITNET-E005] Failed to download model from '{url}'. "
+                f"HTTP {response.status_code}: {err_snip}"
+            )
+
         if response.status_code == 206:
             mode = "ab"
             total_size = int(response.headers.get("content-length", 0)) + downloaded
@@ -146,9 +159,18 @@ def download_model(model_name: str = "bitnet-2b", output_dir: Optional[Path] = N
                         sys.stdout.write(f"\r  [Progress]: [{percent:6.2f}%] ({mb_done:6.1f}/{mb_total:6.1f} MB)")
                         sys.stdout.flush()
 
-        print(f"\n[termux-bitnet] Download successfully completed: {target_path}")
+        # Fail-fast verification of downloaded GGUF file
+        if not verify_model_file(target_path):
+            if target_path.exists():
+                target_path.unlink()
+            raise RuntimeError(
+                f"[ERROR: AMEVA-BITNET-E006] Downloaded model '{target_path}' is corrupted or not a valid GGUF model."
+            )
+
+        print(f"\n[termux-bitnet] Download successfully verified and completed: {target_path}")
         return str(target_path)
     except Exception as e:
-        if target_path.exists() and target_path.stat().st_size == 0:
+        if target_path.exists() and not verify_model_file(target_path):
             target_path.unlink()
         raise RuntimeError(f"Failed to download model '{model_name}': {e}") from e
+
