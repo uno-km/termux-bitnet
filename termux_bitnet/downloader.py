@@ -174,3 +174,22 @@ def download_model(model_name: str = "bitnet-2b", output_dir: Optional[Path] = N
             target_path.unlink()
         raise RuntimeError(f"Failed to download model '{model_name}': {e}") from e
 
+
+
+def resolve_model_path(model_name: str = "bitnet-2b") -> Path:
+    """Standard Unified Model Path Resolver for termux-bitnet."""
+    from .hardware import get_unified_model_search_dirs
+    clean = model_name.lower().strip()
+    f_info = AVAILABLE_MODELS.get(clean)
+    fname = f_info["file"] if f_info else model_name
+
+    if Path(model_name).is_file():
+        return Path(model_name).resolve()
+
+    search_dirs = get_unified_model_search_dirs("bitnet")
+    for d in search_dirs:
+        for cand in [d / fname, d / model_name, d / f"{model_name}.gguf"]:
+            if cand.is_file() and verify_model_file(cand):
+                return cand.resolve()
+
+    return DEFAULT_CACHE_DIR / fname

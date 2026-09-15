@@ -260,3 +260,47 @@ def doctor() -> Dict[str, Any]:
         "has_dotprod": profile.has_dotprod,
     }
 
+
+
+# Standard Unified Hardware Interface Aliases
+def is_termux() -> bool:
+    import os
+    from pathlib import Path
+    if os.environ.get("TERMUX_VERSION") or os.environ.get("TERMUX_APP_PID"):
+        return True
+    prefix = os.environ.get("PREFIX", "")
+    if "com.termux" in prefix:
+        return True
+    return Path("/data/data/com.termux").is_dir()
+
+
+def is_android() -> bool:
+    import sys
+    return is_termux() or "android" in sys.platform.lower()
+
+
+resolve_device = resolve_device_backend
+
+
+def get_optimal_threads() -> int:
+    return detect_hardware().recommended_threads
+
+
+def bind_hardware(engine: Any, requested_device: str = "auto", **kwargs) -> Optional[Any]:
+    return bind_bitnet_hardware(engine, requested_device)
+
+
+def get_unified_model_search_dirs(submodule: str = "bitnet") -> list:
+    import os
+    from pathlib import Path
+    home = Path.home()
+    dirs = []
+    env_dir = os.environ.get("AMEVA_MODELS_DIR") or os.environ.get("TERMUX_BITNET_MODELS_DIR")
+    if env_dir:
+        dirs.append(Path(env_dir))
+    dirs.extend([
+        home / ".cache" / f"termux-{submodule}" / "models",
+        home / ".cache" / f"termux-{submodule}",
+        home / f".termux-{submodule}" / "models",
+    ])
+    return [d for d in dirs if d.exists()]

@@ -29,3 +29,17 @@ __all__ = [
     "PlatformNotSupportedError",
     "BitNetEngineNotFound",
 ]
+
+
+# Standard Unified Engine Factory
+def load(model: str = "bitnet-2b", device: str = "auto", threads: int | None = None, **kwargs) -> BitNetEngine:
+    """Standard Unified Engine Factory for termux-bitnet."""
+    from termux_bitnet.config import BitNetConfig
+    from termux_bitnet.downloader import resolve_model_path
+    m_path = ""
+    try:
+        m_path = str(resolve_model_path(model))
+    except Exception:
+        pass
+    cfg = BitNetConfig(model_path=m_path, device=device, n_threads=threads or 4, **kwargs)
+    return BitNetEngine(cfg)

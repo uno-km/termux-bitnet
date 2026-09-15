@@ -1,0 +1,39 @@
+{
+  "name": "termux-bitnet",
+  "version": "1.4.0",
+  "description": "1.58-bit (i2_s) BitNet on-device inference SDK with verified ARM NEON & DotProd kernels for Node.js on Android Termux & ARM64",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "bin": {
+    "termux-bitnet": "bin/cli.js",
+    "termux-bitnet-js": "bin/termux-bitnet.js"
+  },
+  "scripts": {
+    "test": "node -e \"console.log('termux-bitnet npm package OK');\""
+  },
+  "keywords": [
+    "bitnet",
+    "termux",
+    "arm64",
+    "llm",
+    "inference",
+    "quantization",
+    "neon"
+  ],
+  "author": "uno-km (dev@amevafoundation.org)",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@ameva/runtime": ">=2.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/uno-km/termux-bitnet.git"
+  },
+  "bugs": {
+    "url": "https://github.com/uno-km/termux-bitnet/issues"
+  },
+  "homepage": "https://uno-km.vercel.app/lib/bitnet/",
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

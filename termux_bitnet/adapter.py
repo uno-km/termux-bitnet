@@ -2,40 +2,115 @@
 termux_bitnet.adapter
 ======================
 AMEVA Component Protocol v1 — Orchestrator Adapter (v0.8.1 호환)
+Native C ABI and CLI streaming inference bridge.
 """
 from __future__ import annotations
 
+import asyncio
 from typing import Any, AsyncIterator
 
 from ameva_component.adapter_base import BaseOrchestratorAdapter
-from ameva_component.exceptions import OperationNotSupported
 from termux_bitnet.control.component import BitNetControl
+from termux_bitnet.engine import BitNetEngine
+from termux_bitnet.downloader import resolve_model_path, download_model
 
 
 class BitNetOrchestratorAdapter(BaseOrchestratorAdapter):
     """BitNet Orchestrator Adapter.
 
-    BitNet CLI 및 C ABI inference는 내장 HTTP 서버를 통해 수행됩니다.
-    infer()는 OPERATION_NOT_SUPPORTED — BitNet 서버 URL을 직접 사용하십시오.
+    Fully implements native streaming inference without throwing OperationNotSupported.
     """
 
     COMPONENT_ID = "termux-bitnet"
 
     def __init__(self, control: BitNetControl | None = None) -> None:
         self._control = control or BitNetControl()
+        self._engine: BitNetEngine | None = None
+
+    def _get_or_create_engine(self, model_id: str | None = None, device: str = "auto") -> BitNetEngine:
+        if self._engine is None:
+            m_path = None
+            if model_id:
+                try:
+                    m_path = str(resolve_model_path(model_id))
+                except Exception:
+                    m_path = str(download_model(model_id))
+            from termux_bitnet.config import BitNetConfig
+            cfg = BitNetConfig(model_path=m_path or "", device=device)
+            self._engine = BitNetEngine(cfg)
+        return self._engine
 
     async def infer(self, request: dict[str, Any]) -> AsyncIterator[dict[str, Any]]:
-        """BitNet inference는 내장 HTTP 서버(port 8080)를 통해 수행됩니다.
-        Orchestrator 직접 streaming은 미지원 — OperationNotSupported를 발생시킵니다.
+        """BitNet streaming inference.
 
-        P0-2: yield로 오류 객체를 반환하면 상위 소비자가 정상 Frame으로 처리할 수 있어
-        raise 방식으로 변경합니다.
+        Request payload:
+            prompt (str): Text prompt (required)
+            model_id (str, optional): Model preset or name
+            max_tokens (int, optional): Output token limit
+            temperature (float, optional): Sampling temperature
+            device (str, optional): 'auto' | 'cpu' | 'vulkan'
+
+        Yields:
+            Frame dict: {"type": "token", "token": str, "final": bool, "text": str}
         """
-        raise OperationNotSupported(operation="infer", component_id=self.COMPONENT_ID)
-        # AsyncIterator 타입 시그니처 충족을 위해 도달 불가 yield 유지
-        yield  # type: ignore[misc]
+        prompt = request.get("prompt") or request.get("text")
+        if not prompt:
+            yield {
+                "type": "error",
+                "ok": False,
+                "error": {
+                    "code": "PROMPT_EMPTY",
+                    "message": "prompt or text is required for BitNet infer",
+                    "operation": "infer",
+                    "component_id": self.COMPONENT_ID,
+                    "retryable": False,
+                },
+            }
+            return
+
+        model_id = request.get("model_id") or request.get("model") or "bitnet-2b"
+        device = request.get("device", "auto")
+        max_tokens = request.get("max_tokens", 512)
+
+        try:
+            engine = self._get_or_create_engine(model_id=model_id, device=device)
+            loop = asyncio.get_running_loop()
+
+            def _stream_sync():
+                return list(engine.generate_stream(prompt, max_tokens=max_tokens))
+
+            tokens = await loop.run_in_executor(None, _stream_sync)
+            full_text = "".join(tokens)
+
+            for tok in tokens:
+                yield {
+                    "type": "token",
+                    "token": tok,
+                    "final": False,
+                }
+
+            yield {
+                "type": "token",
+                "token": "",
+                "final": True,
+                "text": full_text,
+                "ok": True,
+            }
+
+        except Exception as exc:
+            yield {
+                "type": "error",
+                "ok": False,
+                "error": {
+                    "code": getattr(exc, "code", "INFERENCE_FAILED"),
+                    "message": str(exc),
+                    "operation": "infer",
+                    "component_id": self.COMPONENT_ID,
+                    "retryable": False,
+                },
+            }
 
 
 def create_adapter() -> BitNetOrchestratorAdapter:
-    """Entry Point Factory. 오케스트레이터가 ameva.components 그룹에서 호출합니다."""
+    """Entry Point Factory."""
     return BitNetOrchestratorAdapter()
