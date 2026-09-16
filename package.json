@@ -6,7 +6,7 @@
   "types": "index.d.ts",
   "bin": {
     "termux-bitnet": "bin/cli.js",
-    "termux-bitnet-js": "bin/termux-bitnet.js"
+    "termux-bitnet-js": "bin/cli.js"
   },
   "scripts": {
     "test": "node -e \"console.log('termux-bitnet npm package OK');\""
