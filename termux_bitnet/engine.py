@@ -90,19 +90,19 @@ class BitNetEngine:
             self._init_context()
 
     def _find_library_path(self) -> Optional[Path]:
-        """Locate compiled native shared library in package or system paths."""
+        """Locate compiled native shared library in package or system paths ($PREFIX/lib SSOT)."""
         termux_prefix = os.environ.get("PREFIX", "/data/data/com.termux/files/usr")
         candidates = [
-            # Local package build directory
-            Path(__file__).parent / "libtermux_bitnet.so",
-            Path(__file__).parent / "termux_bitnet.dll",
-            Path(__file__).parent / "libtermux_bitnet.dylib",
-            # Termux / system library paths
+            # 1. Termux / system SSOT library paths (Bionic linker native)
             Path(termux_prefix) / "lib" / "libtermux_bitnet.so",
             Path("/data/data/com.termux/files/usr/lib/libtermux_bitnet.so"),
             Path("/usr/local/lib/libtermux_bitnet.so"),
             Path("/usr/lib/libtermux_bitnet.so"),
-            # CMake build outputs
+            # 2. Local package directory
+            Path(__file__).parent / "libtermux_bitnet.so",
+            Path(__file__).parent / "termux_bitnet.dll",
+            Path(__file__).parent / "libtermux_bitnet.dylib",
+            # 3. CMake build outputs
             Path(__file__).parents[1] / "build" / "libtermux_bitnet.so",
             Path(__file__).parents[1] / "build" / "Release" / "termux_bitnet.dll",
             Path(__file__).parents[1] / "build" / "lib" / "libtermux_bitnet.so",

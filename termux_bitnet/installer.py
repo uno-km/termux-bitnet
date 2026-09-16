@@ -46,8 +46,15 @@ def get_candidate_library_urls() -> list[str]:
 
 
 def install_prebuilt_library() -> bool:
-    target_dir = Path(__file__).parent
-    target_so = target_dir / "libtermux_bitnet.so"
+    prefix = os.environ.get("PREFIX", "/data/data/com.termux/files/usr")
+    lib_dir = Path(prefix) / "lib"
+    lib_dir.mkdir(parents=True, exist_ok=True)
+    target_so = lib_dir / "libtermux_bitnet.so"
+
+    xdg_cache = Path(os.environ.get("XDG_CACHE_HOME") or (Path.home() / ".cache"))
+    staging_dir = xdg_cache / "termux-bitnet" / ".staging"
+    staging_dir.mkdir(parents=True, exist_ok=True)
+    staging_so = staging_dir / "libtermux_bitnet.so"
 
     print("=========================================================")
     print("  termux-bitnet One-Click Engine Provisioning")
@@ -66,20 +73,27 @@ def install_prebuilt_library() -> bool:
                 if resp.status == 200:
                     data = resp.read()
                     if len(data) > 1024 and data[:4] == b"\x7fELF":
-                        with open(target_so, "wb") as f:
+                        with open(staging_so, "wb") as f:
                             f.write(data)
-                        os.chmod(target_so, 0o755)
-                        print(f"Successfully provisioned native C++ engine ({len(data)} bytes, ELF verified).")
+                        staging_so.chmod(0o755)
+                        shutil.move(str(staging_so), str(target_so))
+                        target_so.chmod(0o755)
+                        shutil.rmtree(staging_dir, ignore_errors=True)
+                        print(f"Successfully provisioned native C++ engine to {target_so} ({len(data)} bytes, ELF verified).")
                         return True
                     elif data[:4] != b"\x7fELF":
                         print(f"[-] Downloaded file from {url} is not a valid ELF shared object.")
         except Exception as e:
             print(f"[-] Pre-built download skipped: {e}")
+            if staging_so.exists():
+                staging_so.unlink(missing_ok=True)
+
+    shutil.rmtree(staging_dir, ignore_errors=True)
 
     # Fallback to local cmake compilation if tools exist
     print("[*] Attempting local compilation with CMake / Clang...")
     import subprocess
-    root_dir = target_dir.parent
+    root_dir = Path(__file__).parent.parent
     if (root_dir / "CMakeLists.txt").exists():
         build_dir = root_dir / "build"
         build_dir.mkdir(exist_ok=True)
@@ -88,9 +102,9 @@ def install_prebuilt_library() -> bool:
             subprocess.check_call(["cmake", "--build", str(build_dir), "-j4"])
             built_so = build_dir / "libtermux_bitnet.so"
             if built_so.exists():
-                shutil.copy(built_so, target_so)
-                os.chmod(target_so, 0o755)
-                print("Successfully built native engine locally.")
+                shutil.copy2(built_so, target_so)
+                target_so.chmod(0o755)
+                print(f"Successfully built native engine locally and installed to {target_so}.")
                 return True
         except Exception as e:
             print(f"[-] Local build failed: {e}")

@@ -66,72 +66,43 @@ fi
 
 # 4. Pre-provision Core Python Toolchain & Ecosystem Dependencies
 echo "-> [3/6] Pre-provisioning Python build toolchain and ecosystem accelerators..."
-python -m pip install --upgrade pip setuptools wheel
-python -m pip install --upgrade ameva-runtime || true
+python -m pip install setuptools wheel
+python -m pip install ameva-runtime || true
 
-# 5. Dynamic Wheel Installation or Local Source Build
+# 5. Standard Python SDK Installation
 echo "-> [4/6] Installing termux-bitnet Python SDK (v${VERSION})..."
-WHEEL_INSTALLED=0
-TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/termux-bitnet-inst.XXXXXXXX")"
-trap 'rm -rf "${TMP_DIR}"' EXIT INT TERM HUP
-
-# Prioritized candidate endpoints for release wheels
-CANDIDATE_URLS=()
-if [ -n "${TERMUX_BITNET_RELEASE_BASE:-}" ]; then
-    CANDIDATE_URLS+=("${TERMUX_BITNET_RELEASE_BASE%/}/termux_bitnet-${VERSION}-py3-none-any.whl")
-fi
-if [ -n "${TERMUX_BITNET_RELEASE_TAG:-}" ]; then
-    TAG="${TERMUX_BITNET_RELEASE_TAG#v}"
-    CANDIDATE_URLS+=("https://github.com/${REPO}/releases/download/v${TAG}/termux_bitnet-${VERSION}-py3-none-any.whl")
-fi
-CANDIDATE_URLS+=(
-    "https://github.com/${REPO}/releases/download/v${VERSION}/termux_bitnet-${VERSION}-py3-none-any.whl"
-    "https://github.com/${REPO}/releases/latest/download/termux_bitnet-${VERSION}-py3-none-any.whl"
-    "https://github.com/uno-km/ameva-runtime/releases/latest/download/termux_bitnet-${VERSION}-py3-none-any.whl"
-)
-
-for URL in "${CANDIDATE_URLS[@]}"; do
-    WHEEL_FILE="${TMP_DIR}/termux_bitnet-${VERSION}-py3-none-any.whl"
-    if curl -sSL -f --connect-timeout 8 -o "${WHEEL_FILE}" "${URL}" 2>/dev/null; then
-        if [ -s "${WHEEL_FILE}" ] && [ "$(wc -c < "${WHEEL_FILE}")" -gt 10000 ]; then
-            echo "   -> Fetched verified release wheel from: ${URL}"
-            python -m pip install "${WHEEL_FILE}" && WHEEL_INSTALLED=1
-            break
-        fi
-    fi
-done
-
-if [ "${WHEEL_INSTALLED}" != "1" ]; then
-    if [ -f "pyproject.toml" ]; then
-        echo "   -> Installing from local source repository..."
-        python -m pip install --no-build-isolation -e .
-    else
-        echo "   -> Installing latest release from PyPI..."
-        python -m pip install termux-bitnet || true
-    fi
+if [ -f "pyproject.toml" ]; then
+    echo "   -> Installing from local source repository..."
+    python -m pip install --no-build-isolation -e .
+else
+    echo "   -> Installing from PyPI..."
+    python -m pip install termux-bitnet || true
 fi
 
 # 6. Native C/C++ Compute Engine & Prebuilt Artifact Installation
+TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/termux-bitnet-inst.XXXXXXXX")"
+trap 'rm -rf "${TMP_DIR}"' EXIT INT TERM HUP
+
 PREBUILT_SUCCESS=false
 if [ "${ARCH}" = "aarch64" ] || [ "${ARCH}" = "arm64" ]; then
     echo "-> [5/6] Checking for verified ARM64 prebuilt native core bundle (v${VERSION})..."
     PREBUILT_URL="https://github.com/${REPO}/releases/download/v${VERSION}/termux-bitnet-v${VERSION}-android-aarch64.tar.gz"
     PREBUILT_TAR="${TMP_DIR}/termux-bitnet-v${VERSION}-android-aarch64.tar.gz"
+    STAGING_DIR="${TMP_DIR}/.staging"
     if curl -sSL -f --connect-timeout 8 -o "${PREBUILT_TAR}" "${PREBUILT_URL}" 2>/dev/null; then
         if [ -s "${PREBUILT_TAR}" ] && [ "$(wc -c < "${PREBUILT_TAR}")" -gt 10000 ]; then
             echo "   -> Fetched verified prebuilt native bundle from: ${PREBUILT_URL}"
-            tar -xzf "${PREBUILT_TAR}" -C "${TMP_DIR}"
-            if [ -f "${TMP_DIR}/libtermux_bitnet.so" ]; then
-                mkdir -p "${LIB_DIR}"
-                cp "${TMP_DIR}/libtermux_bitnet.so" "${LIB_DIR}/"
-                mkdir -p termux_bitnet
-                cp "${TMP_DIR}/libtermux_bitnet.so" termux_bitnet/ 2>/dev/null || true
+            mkdir -p "${STAGING_DIR}" "${LIB_DIR}" "${BIN_DIR}"
+            tar -xzf "${PREBUILT_TAR}" -C "${STAGING_DIR}"
+            if [ -f "${STAGING_DIR}/libtermux_bitnet.so" ]; then
+                cp "${STAGING_DIR}/libtermux_bitnet.so" "${LIB_DIR}/"
+                chmod 0755 "${LIB_DIR}/libtermux_bitnet.so"
             fi
-            if [ -f "${TMP_DIR}/termux-bitnet-cli" ]; then
-                mkdir -p "${BIN_DIR}"
-                cp "${TMP_DIR}/termux-bitnet-cli" "${BIN_DIR}/"
-                chmod +x "${BIN_DIR}/termux-bitnet-cli"
+            if [ -f "${STAGING_DIR}/termux-bitnet-cli" ]; then
+                cp "${STAGING_DIR}/termux-bitnet-cli" "${BIN_DIR}/"
+                chmod 0755 "${BIN_DIR}/termux-bitnet-cli"
             fi
+            rm -rf "${STAGING_DIR}"
             PREBUILT_SUCCESS=true
         fi
     fi
@@ -148,13 +119,12 @@ if [ "${PREBUILT_SUCCESS}" = false ] && [ -f "CMakeLists.txt" ] && command -v cm
     if [ -f "build/libtermux_bitnet.so" ]; then
         mkdir -p "${LIB_DIR}"
         cp build/libtermux_bitnet.so "${LIB_DIR}/"
-        mkdir -p termux_bitnet
-        cp build/libtermux_bitnet.so termux_bitnet/ 2>/dev/null || true
+        chmod 0755 "${LIB_DIR}/libtermux_bitnet.so"
     fi
     if [ -f "build/termux-bitnet-cli" ]; then
         mkdir -p "${BIN_DIR}"
-        cp build/termux-bitnet-cli "${BIN_DIR}/" 2>/dev/null || true
-        chmod +x "${BIN_DIR}/termux-bitnet-cli" 2>/dev/null || true
+        cp build/termux-bitnet-cli "${BIN_DIR}/"
+        chmod 0755 "${BIN_DIR}/termux-bitnet-cli"
     fi
 fi
 
