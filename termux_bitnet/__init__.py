@@ -6,11 +6,13 @@ from termux_bitnet.hardware import (
     detect_hardware,
     print_hardware_summary,
     resolve_device_backend,
+    resolve_device,
+    HardwareProfile,
     bind_bitnet_hardware,
     doctor,
 )
-from termux_bitnet.downloader import download_model, AVAILABLE_MODELS
-from termux_bitnet.exceptions import PlatformNotSupportedError, BitNetEngineNotFound
+from termux_bitnet.downloader import download_model, list_models, resolve_model_path, AVAILABLE_MODELS
+from termux_bitnet.exceptions import AmevaTermuxError, PlatformNotSupportedError, BitNetEngineNotFound
 
 __version__ = "1.4.0"
 __author__ = "uno-km"
@@ -22,13 +24,19 @@ __all__ = [
     "detect_hardware",
     "print_hardware_summary",
     "resolve_device_backend",
+    "resolve_device",
+    "HardwareProfile",
     "bind_bitnet_hardware",
     "doctor",
     "download_model",
+    "list_models",
+    "resolve_model_path",
     "AVAILABLE_MODELS",
+    "AmevaTermuxError",
     "PlatformNotSupportedError",
     "BitNetEngineNotFound",
 ]
+
 
 
 # Standard Unified Engine Factory

@@ -1,9 +1,10 @@
 import os
 import sys
 import difflib
+import hashlib
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 import requests
 
 logger = logging.getLogger(__name__)
@@ -55,20 +56,48 @@ def list_available_models():
     print("=========================================================================")
 
 
-def verify_model_file(file_path: Path) -> bool:
+def list_models():
+    """Return verified BitNet GGUF models in standard dictionary format."""
+    return [{"id": k, **v} for k, v in AVAILABLE_MODELS.items()]
+
+
+
+def verify_gguf_magic_header(file_path: Union[str, Path]) -> bool:
     """Verify that file exists and has valid GGUF magic header ('GGUF')."""
-    if not file_path.exists() or file_path.stat().st_size < 1024:
+    p = Path(file_path)
+    if not p.exists() or p.stat().st_size < 1024:
         return False
     try:
-        with open(file_path, "rb") as f:
+        with open(p, "rb") as f:
             magic = f.read(4)
-            return magic == b"GGUF" or file_path.stat().st_size > 100 * 1024 * 1024
+            return magic == b"GGUF" or p.stat().st_size > 100 * 1024 * 1024
     except OSError as e:
-        logger.debug("Failed to read GGUF header for '%s': %s", file_path, e)
+        logger.debug("Failed to read GGUF header for '%s': %s", p, e)
         return False
 
 
-def download_model(model_name: str = "bitnet-2b", output_dir: Optional[Path] = None, force: bool = False) -> str:
+# Backward compatibility alias
+verify_model_file = verify_gguf_magic_header
+
+
+def verify_file_sha256(file_path: Union[str, Path], expected_sha256: str, block_size: int = 65536) -> bool:
+    """Standard Unified SHA-256 Checksum Verifier for termux-bitnet."""
+    p = Path(file_path)
+    if not p.is_file() or not expected_sha256:
+        return False
+    hasher = hashlib.sha256()
+    try:
+        with open(p, "rb") as f:
+            for chunk in iter(lambda: f.read(block_size), b""):
+                hasher.update(chunk)
+        return hasher.hexdigest().lower() == expected_sha256.strip().lower()
+    except OSError as e:
+        logger.debug("Failed to compute SHA-256 for '%s': %s", p, e)
+        return False
+
+
+
+def download_model(model_name: str = "bitnet-2b", output_dir: Optional[Path] = None, force: bool = False) -> Path:
     """Download 1.58-bit quantized GGUF model with streaming progress bar and resume support."""
     if not model_name or not model_name.strip():
         raise ValueError(
@@ -97,11 +126,12 @@ def download_model(model_name: str = "bitnet-2b", output_dir: Optional[Path] = N
     target_dir = Path(output_dir) if output_dir else DEFAULT_CACHE_DIR
     target_dir.mkdir(parents=True, exist_ok=True)
     target_path = target_dir / model_info["file"]
+    part_path = target_path.with_suffix(target_path.suffix + ".part")
 
     if not force and target_path.exists() and verify_model_file(target_path):
         sz_mb = target_path.stat().st_size / (1024 * 1024)
         print(f"[termux-bitnet] Valid model already cached at: {target_path} ({sz_mb:.1f} MB)")
-        return str(target_path)
+        return target_path
 
     url = model_info["url"]
     print(f"[termux-bitnet] Downloading {model_info['description']}...")
@@ -115,19 +145,21 @@ def download_model(model_name: str = "bitnet-2b", output_dir: Optional[Path] = N
     downloaded = 0
     mode = "wb"
 
-    if target_path.exists() and not force:
-        downloaded = target_path.stat().st_size
+    if part_path.exists() and not force:
+        downloaded = part_path.stat().st_size
         headers["Range"] = f"bytes={downloaded}-"
         mode = "ab"
 
     try:
         response = requests.get(url, headers=headers, stream=True, timeout=30)
         if response.status_code == 416:  # Range Not Satisfiable -> already complete
-            if verify_model_file(target_path):
-                return str(target_path)
+            if verify_model_file(part_path):
+                os.replace(part_path, target_path)
+                return target_path
             else:
                 downloaded = 0
                 mode = "wb"
+                headers.pop("Range", None)
                 response = requests.get(url, headers={"User-Agent": f"termux-bitnet/{ua_version} (Android; ARM64)"}, stream=True, timeout=30)
 
         if response.status_code not in (200, 206):
@@ -147,7 +179,7 @@ def download_model(model_name: str = "bitnet-2b", output_dir: Optional[Path] = N
 
         chunk_size = 1024 * 1024  # 1MB buffer
 
-        with open(target_path, mode) as f:
+        with open(part_path, mode) as f:
             for chunk in response.iter_content(chunk_size=chunk_size):
                 if chunk:
                     f.write(chunk)
@@ -160,18 +192,19 @@ def download_model(model_name: str = "bitnet-2b", output_dir: Optional[Path] = N
                         sys.stdout.flush()
 
         # Fail-fast verification of downloaded GGUF file
-        if not verify_model_file(target_path):
-            if target_path.exists():
-                target_path.unlink()
+        if not verify_model_file(part_path):
+            if part_path.exists():
+                part_path.unlink()
             raise RuntimeError(
-                f"[ERROR: AMEVA-BITNET-E006] Downloaded model '{target_path}' is corrupted or not a valid GGUF model."
+                f"[ERROR: AMEVA-BITNET-E006] Downloaded model '{part_path}' is corrupted or not a valid GGUF model."
             )
 
+        os.replace(part_path, target_path)
         print(f"\n[termux-bitnet] Download successfully verified and completed: {target_path}")
-        return str(target_path)
+        return target_path
     except Exception as e:
-        if target_path.exists() and not verify_model_file(target_path):
-            target_path.unlink()
+        if part_path.exists() and not verify_model_file(part_path):
+            part_path.unlink(missing_ok=True)
         raise RuntimeError(f"Failed to download model '{model_name}': {e}") from e
 
 

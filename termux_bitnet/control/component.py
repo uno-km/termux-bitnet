@@ -34,7 +34,108 @@ class BitNetControl(ComponentControl):
     COMPONENT_TYPE = "llm"
     CAPABILITIES   = ("llm.chat", "llm.completion")
 
-    DEFAULT_MODELS_DIR = Path.home() / ".termux-bitnet" / "models"
+    # DEFAULT_PID_FILE: COMPONENT_ID 기반 표준 경로
+    DEFAULT_PID_FILE: Path = Path.home() / ".local" / "run" / "termux-bitnet.pid"
+
+    def _check_pid(self) -> dict[str, Any]:
+        """BLOCKER 1: PID 파일 및 상태 파일 기반 프로세스 생존 여부 확인.
+        PermissionError/OSError 발생 시 alive=None, verified=False, inspection_error 반환."""
+        import logging
+        _log = logging.getLogger(__name__)
+
+        if self.DEFAULT_PID_FILE.exists():
+            try:
+                raw = self.DEFAULT_PID_FILE.read_text().strip()
+                pid = int(raw)
+            except (ValueError, OSError) as parse_err:
+                _log.warning("[bitnet] PID file parse/read error: %s", parse_err)
+                return {
+                    "pid": None,
+                    "alive": None,
+                    "verified": False,
+                    "inspection_error": {
+                        "code": "PID_PARSE_ERROR",
+                        "message": str(parse_err),
+                    },
+                }
+
+            try:
+                os.kill(pid, 0)
+                return {"pid": pid, "alive": True, "verified": True}
+            except ProcessLookupError:
+                return {
+                    "pid": pid,
+                    "alive": False,
+                    "verified": True,
+                    "reason": "process_lookup_failed",
+                }
+            except PermissionError as perm_err:
+                _log.warning("[bitnet] PID %s alive check PermissionError: %s", pid, perm_err)
+                return {
+                    "pid": pid,
+                    "alive": None,
+                    "verified": False,
+                    "inspection_error": {
+                        "code": "PROCESS_INSPECTION_PERMISSION_DENIED",
+                        "message": str(perm_err),
+                    },
+                }
+            except OSError as os_err:
+                _log.warning("[bitnet] PID %s alive check OSError: %s", pid, os_err)
+                return {
+                    "pid": pid,
+                    "alive": None,
+                    "verified": False,
+                    "inspection_error": {
+                        "code": "PROCESS_INSPECTION_OS_ERROR",
+                        "message": str(os_err),
+                    },
+                }
+
+        state_data = self._state_file.read()
+        if state_data:
+            pid = state_data.get("process", {}).get("pid")
+            if pid:
+                try:
+                    os.kill(pid, 0)
+                    return {"pid": pid, "alive": True, "verified": True}
+                except ProcessLookupError:
+                    return {
+                        "pid": pid,
+                        "alive": False,
+                        "verified": True,
+                        "reason": "process_lookup_failed",
+                    }
+                except PermissionError as perm_err:
+                    _log.warning("[bitnet] State-file PID %s PermissionError: %s", pid, perm_err)
+                    return {
+                        "pid": pid,
+                        "alive": None,
+                        "verified": False,
+                        "inspection_error": {
+                            "code": "PROCESS_INSPECTION_PERMISSION_DENIED",
+                            "message": str(perm_err),
+                        },
+                    }
+                except OSError as os_err:
+                    _log.warning("[bitnet] State-file PID %s OSError: %s", pid, os_err)
+                    return {
+                        "pid": pid,
+                        "alive": None,
+                        "verified": False,
+                        "inspection_error": {
+                            "code": "PROCESS_INSPECTION_OS_ERROR",
+                            "message": str(os_err),
+                        },
+                    }
+        return {
+            "pid": None,
+            "alive": False,
+            "verified": True,
+            "reason": "pid_file_missing",
+        }
+
+    DEFAULT_MODELS_DIR: Path = Path.home() / ".termux-bitnet" / "models"
 
     def __init__(self, models_dir: Path | None = None) -> None:
         self._models_dir = models_dir or self.DEFAULT_MODELS_DIR
@@ -49,7 +150,8 @@ class BitNetControl(ComponentControl):
     def _get_version(self) -> str:
         try:
             from termux_bitnet import __version__; return __version__
-        except Exception: return "1.4.0"
+        except Exception:
+            return "1.4.0"
 
     def component_info(self) -> dict:
         info = ComponentInfo(

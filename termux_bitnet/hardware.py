@@ -291,8 +291,9 @@ def is_termux() -> bool:
 
 
 def is_android() -> bool:
-    import sys
-    return is_termux() or "android" in sys.platform.lower()
+    """Check whether running on Android (Termux execution implies Android runtime)."""
+    return is_termux()
+
 
 
 resolve_device = resolve_device_backend
@@ -303,20 +304,51 @@ def get_optimal_threads() -> int:
 
 
 def bind_hardware(engine: Any, requested_device: str = "auto", **kwargs) -> Optional[Any]:
+    """Standard Unified Hardware Binding Interface for termux-bitnet."""
     return bind_bitnet_hardware(engine, requested_device)
 
 
+
 def get_unified_model_search_dirs(submodule: str = "bitnet") -> list:
+    """
+    Returns unified model search paths adhering to AMEVA Ecosystem Shared Storage Specification.
+    Enables zero-redundancy model sharing across STT, TTS, LLaMA, Vision, and Diffusion.
+    """
     import os
     from pathlib import Path
+
     home = Path.home()
     dirs = []
+
     env_dir = os.environ.get("AMEVA_MODELS_DIR") or os.environ.get("TERMUX_BITNET_MODELS_DIR")
     if env_dir:
-        dirs.append(Path(env_dir))
-    dirs.extend([
-        home / ".cache" / f"termux-{submodule}" / "models",
-        home / ".cache" / f"termux-{submodule}",
-        home / f".termux-{submodule}" / "models",
-    ])
-    return [d for d in dirs if d.exists()]
+        p = Path(env_dir)
+        dirs.extend([p / submodule, p])
+
+    prefixes = [home]
+    prefix_env = os.environ.get("PREFIX")
+    if prefix_env:
+        prefixes.append(Path(prefix_env).parent / "home")
+
+    for base in prefixes:
+        dirs.extend([
+            base / "models" / submodule,
+            base / "models",
+            base / "ameva-models" / submodule,
+            base / "ameva-models",
+            base / ".cache" / "ameva" / "models" / submodule,
+            base / ".cache" / "ameva" / "models",
+            base / ".cache" / f"termux-{submodule}" / "models",
+            base / f".termux-{submodule}" / "models",
+        ])
+
+    # Deduplicate while preserving order
+    seen = set()
+    unique_dirs = []
+    for d in dirs:
+        resolved = str(d)
+        if resolved not in seen:
+            seen.add(resolved)
+            unique_dirs.append(d)
+
+    return unique_dirs
