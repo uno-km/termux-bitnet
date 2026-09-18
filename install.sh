@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# termux-bitnet: Universal Dynamic One-Line Bootstrap Installer (v1.4.2)
+# termux-bitnet: Universal Dynamic One-Line Bootstrap Installer (v1.4.3)
 # Open-Source under Apache License 2.0 (AMEVA Foundation)
 # Usage: curl -sL https://raw.githubusercontent.com/uno-km/termux-bitnet/main/install.sh | bash
 # ==============================================================================
 set -euo pipefail
 
-VERSION="${TERMUX_BITNET_VERSION:-1.4.2}"
+VERSION="${TERMUX_BITNET_VERSION:-1.4.3}"
 REPO="uno-km/termux-bitnet"
 ARCH="$(uname -m)"
 
@@ -62,12 +62,25 @@ TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/termux-bitnet-inst.XXXXXXXX")"
 trap 'rm -rf "${TMP_DIR}"' EXIT INT TERM HUP
 
 echo "-> [3/4] Provisioning 100% Zero-Compilation Pure-CPU ARM64 Native Engine (v${VERSION})..."
-PREBUILT_URL="https://github.com/${REPO}/releases/download/v${VERSION}/termux-bitnet-v${VERSION}-android-aarch64.tar.gz"
-PREBUILT_TAR="${TMP_DIR}/termux-bitnet-v${VERSION}-android-aarch64.tar.gz"
+CANDIDATE_URLS=(
+    "https://github.com/${REPO}/releases/download/v${VERSION}/termux-bitnet-v${VERSION}-android-aarch64.tar.gz"
+    "https://github.com/${REPO}/releases/download/v1.4.0/termux-bitnet-v1.4.0-android-aarch64.tar.gz"
+    "https://github.com/${REPO}/releases/latest/download/termux-bitnet-v1.4.0-android-aarch64.tar.gz"
+)
+PREBUILT_TAR="${TMP_DIR}/termux-bitnet.tar.gz"
 STAGING_DIR="${TMP_DIR}/.staging"
 
 mkdir -p "${STAGING_DIR}" "${LIB_DIR}" "${BIN_DIR}"
-if curl -sSL -f --connect-timeout 10 --retry 2 -o "${PREBUILT_TAR}" "${PREBUILT_URL}"; then
+FETCH_SUCCESS=false
+for URL in "${CANDIDATE_URLS[@]}"; do
+    if curl -sSL -f --connect-timeout 10 --retry 2 -o "${PREBUILT_TAR}" "${URL}"; then
+        FETCH_SUCCESS=true
+        echo "   -> [OK] Successfully fetched prebuilt native bundle from: ${URL}"
+        break
+    fi
+done
+
+if [ "${FETCH_SUCCESS}" = "true" ]; then
     tar -xzf "${PREBUILT_TAR}" -C "${STAGING_DIR}"
     if [ -f "${STAGING_DIR}/libtermux_bitnet.so" ]; then
         cp "${STAGING_DIR}/libtermux_bitnet.so" "${LIB_DIR}/"
@@ -77,12 +90,13 @@ if curl -sSL -f --connect-timeout 10 --retry 2 -o "${PREBUILT_TAR}" "${PREBUILT_
     if [ -f "${STAGING_DIR}/termux-bitnet-cli" ]; then
         cp "${STAGING_DIR}/termux-bitnet-cli" "${BIN_DIR}/"
         chmod 0755 "${BIN_DIR}/termux-bitnet-cli"
+        ln -sf "${BIN_DIR}/termux-bitnet-cli" "${BIN_DIR}/termux-bitnet" 2>/dev/null || true
         ln -sf "${BIN_DIR}/termux-bitnet-cli" "${BIN_DIR}/termux-bitnet-cli-cpu" 2>/dev/null || true
         echo "   -> [OK] Deployed native standalone CLI to ${BIN_DIR}/termux-bitnet-cli"
     fi
     rm -rf "${STAGING_DIR}"
 else
-    echo "[ERROR] Failed to fetch verified prebuilt binary bundle from ${PREBUILT_URL}"
+    echo "[ERROR] Failed to fetch verified prebuilt binary bundle from candidate release mirrors."
     exit 1
 fi
 
