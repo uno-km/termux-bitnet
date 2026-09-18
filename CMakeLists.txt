@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(termux_bitnet VERSION 1.4.2 LANGUAGES C CXX)
+project(termux_bitnet VERSION 1.4.3 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
