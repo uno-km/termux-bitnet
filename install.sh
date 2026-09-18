@@ -43,7 +43,7 @@ fi
 # 3. System Package Dependencies (Pure-CPU Zero-Compilation: No Clang/CMake needed)
 if [ "${IS_TERMUX}" = "true" ] && command -v pkg >/dev/null 2>&1; then
     echo "-> [1/4] Ensuring core runtimes (Python, Node.js, Curl, Tar)..."
-    pkg install -y python nodejs curl tar
+    pkg install -y python nodejs curl tar 2>/dev/null || true
 elif command -v apt-get >/dev/null 2>&1; then
     echo "-> [1/4] Ensuring core runtimes..."
     apt-get update -y && apt-get install -y python3 python3-pip nodejs npm curl tar
