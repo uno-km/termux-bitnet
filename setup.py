@@ -79,7 +79,7 @@ if not use_native:
 
 setup(
     name="termux-bitnet",
-    version="1.4.0",
+    version="1.4.1",
     packages=find_packages(),
     install_requires=[
         "requests>=2.28.0",

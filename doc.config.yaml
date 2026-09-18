@@ -2,8 +2,8 @@ name: Termux-BitNet
 lib_slug: bitnet
 package_name_pypi: termux-bitnet
 package_name_npm: termux-bitnet
-version: v1.4.0
-release_name: Native Vulkan Compute GPU Acceleration, Permanent VRAM Residency & Dynamic C ABI
+version: v1.4.1
+release_name: 100% Zero-Compilation Pure-CPU Engine & 1-Click Stream Provisioning
 license: Apache-2.0
 platform: Android ARM64 / NEON SIMD & Adreno/Mali Vulkan
 github_repo_url: https://github.com/uno-km/termux-bitnet

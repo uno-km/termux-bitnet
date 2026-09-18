@@ -92,10 +92,13 @@ class BitNetEngine:
     def _find_library_path(self) -> Optional[Path]:
         """Locate compiled native shared library in package or system paths ($PREFIX/lib SSOT)."""
         termux_prefix = os.environ.get("PREFIX", "/data/data/com.termux/files/usr")
+        home = Path(os.environ.get("HOME", os.path.expanduser("~")))
         candidates = [
             # 1. Termux / system SSOT library paths (Bionic linker native)
             Path(termux_prefix) / "lib" / "libtermux_bitnet.so",
             Path("/data/data/com.termux/files/usr/lib/libtermux_bitnet.so"),
+            # 2. AMEVA 2-Tier isolated current release
+            home / ".local" / "share" / "ameva" / "current" / "bitnet" / "lib" / "libtermux_bitnet.so",
             Path("/usr/local/lib/libtermux_bitnet.so"),
             Path("/usr/lib/libtermux_bitnet.so"),
             # 2. Local package directory

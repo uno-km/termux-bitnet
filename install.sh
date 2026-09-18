@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# termux-bitnet: Universal Dynamic One-Line Bootstrap Installer (v1.4.0)
+# termux-bitnet: Universal Dynamic One-Line Bootstrap Installer (v1.4.1)
 # Open-Source under Apache License 2.0 (AMEVA Foundation)
 # Usage: curl -sL https://raw.githubusercontent.com/uno-km/termux-bitnet/main/install.sh | bash
 # ==============================================================================
 set -euo pipefail
 
-VERSION="${TERMUX_BITNET_VERSION:-1.4.0}"
+VERSION="${TERMUX_BITNET_VERSION:-1.4.1}"
 REPO="uno-km/termux-bitnet"
 ARCH="$(uname -m)"
 
@@ -40,92 +40,50 @@ if [ "${IS_TERMUX}" = "true" ] && command -v termux-setup-storage >/dev/null 2>&
     fi
 fi
 
-# 3. System Package Dependencies
+# 3. System Package Dependencies (Pure-CPU Zero-Compilation: No Clang/CMake needed)
 if [ "${IS_TERMUX}" = "true" ] && command -v pkg >/dev/null 2>&1; then
-    echo "-> [1/6] Updating Termux package repositories..."
-    pkg update -y
-    echo "-> [2/6] Installing build toolchains, OpenBLAS, and runtimes..."
-    pkg install -y \
-        python \
-        nodejs \
-        clang \
-        make \
-        cmake \
-        git \
-        curl \
-        tar \
-        wget \
-        openblas \
-        libandroid-execinfo
+    echo "-> [1/4] Ensuring core runtimes (Python, Node.js, Curl, Tar)..."
+    pkg install -y python nodejs curl tar
 elif command -v apt-get >/dev/null 2>&1; then
-    echo "-> [1/6] Updating Ubuntu/Debian repositories..."
-    apt-get update -y
-    echo "-> [2/6] Installing build tools and dependencies..."
-    apt-get install -y build-essential cmake git python3 python3-pip libopenblas-dev nodejs npm curl tar wget
+    echo "-> [1/4] Ensuring core runtimes..."
+    apt-get update -y && apt-get install -y python3 python3-pip nodejs npm curl tar
 fi
 
-# 4. Pre-provision Core Python Toolchain & Ecosystem Dependencies
-echo "-> [3/6] Pre-provisioning Python build toolchain and ecosystem accelerators..."
-python -m pip install setuptools wheel
-python -m pip install ameva-runtime || true
-
-# 5. Standard Python SDK Installation
-echo "-> [4/6] Installing termux-bitnet Python SDK (v${VERSION})..."
+# 4. Standard Python SDK Installation
+echo "-> [2/4] Installing termux-bitnet Python SDK (v${VERSION})..."
 if [ -f "pyproject.toml" ]; then
-    echo "   -> Installing from local source repository..."
     python -m pip install --no-build-isolation -e .
 else
-    echo "   -> Installing from PyPI..."
-    python -m pip install termux-bitnet || true
+    python -m pip install termux-bitnet==${VERSION} || python -m pip install termux-bitnet
 fi
 
-# 6. Native C/C++ Compute Engine & Prebuilt Artifact Installation
+# 5. Native Pure-CPU Compute Engine & 1-Click Stream Extraction
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/termux-bitnet-inst.XXXXXXXX")"
 trap 'rm -rf "${TMP_DIR}"' EXIT INT TERM HUP
 
-PREBUILT_SUCCESS=false
-if [ "${ARCH}" = "aarch64" ] || [ "${ARCH}" = "arm64" ]; then
-    echo "-> [5/6] Checking for verified ARM64 prebuilt native core bundle (v${VERSION})..."
-    PREBUILT_URL="https://github.com/${REPO}/releases/download/v${VERSION}/termux-bitnet-v${VERSION}-android-aarch64.tar.gz"
-    PREBUILT_TAR="${TMP_DIR}/termux-bitnet-v${VERSION}-android-aarch64.tar.gz"
-    STAGING_DIR="${TMP_DIR}/.staging"
-    if curl -sSL -f --connect-timeout 8 -o "${PREBUILT_TAR}" "${PREBUILT_URL}" 2>/dev/null; then
-        if [ -s "${PREBUILT_TAR}" ] && [ "$(wc -c < "${PREBUILT_TAR}")" -gt 10000 ]; then
-            echo "   -> Fetched verified prebuilt native bundle from: ${PREBUILT_URL}"
-            mkdir -p "${STAGING_DIR}" "${LIB_DIR}" "${BIN_DIR}"
-            tar -xzf "${PREBUILT_TAR}" -C "${STAGING_DIR}"
-            if [ -f "${STAGING_DIR}/libtermux_bitnet.so" ]; then
-                cp "${STAGING_DIR}/libtermux_bitnet.so" "${LIB_DIR}/"
-                chmod 0755 "${LIB_DIR}/libtermux_bitnet.so"
-            fi
-            if [ -f "${STAGING_DIR}/termux-bitnet-cli" ]; then
-                cp "${STAGING_DIR}/termux-bitnet-cli" "${BIN_DIR}/"
-                chmod 0755 "${BIN_DIR}/termux-bitnet-cli"
-            fi
-            rm -rf "${STAGING_DIR}"
-            PREBUILT_SUCCESS=true
-        fi
-    fi
-fi
+echo "-> [3/4] Provisioning 100% Zero-Compilation Pure-CPU ARM64 Native Engine (v${VERSION})..."
+PREBUILT_URL="https://github.com/${REPO}/releases/download/v${VERSION}/termux-bitnet-v${VERSION}-android-aarch64.tar.gz"
+PREBUILT_TAR="${TMP_DIR}/termux-bitnet-v${VERSION}-android-aarch64.tar.gz"
+STAGING_DIR="${TMP_DIR}/.staging"
 
-if [ "${PREBUILT_SUCCESS}" = false ] && [ -f "CMakeLists.txt" ] && command -v cmake >/dev/null 2>&1; then
-    echo "   -> Executing hardened on-device C++ CMake compilation (ARM64 NEON + DotProd)..."
-    cmake -B build \
-        -DGGML_NEON=ON \
-        -DGGML_ARM_DOTPROD=ON \
-        -DGGML_VULKAN=OFF \
-        -DCMAKE_BUILD_TYPE=Release
-    cmake --build build --config Release -j"$(nproc 2>/dev/null || echo 4)"
-    if [ -f "build/libtermux_bitnet.so" ]; then
-        mkdir -p "${LIB_DIR}"
-        cp build/libtermux_bitnet.so "${LIB_DIR}/"
+mkdir -p "${STAGING_DIR}" "${LIB_DIR}" "${BIN_DIR}"
+if curl -sSL -f --connect-timeout 10 --retry 2 -o "${PREBUILT_TAR}" "${PREBUILT_URL}"; then
+    tar -xzf "${PREBUILT_TAR}" -C "${STAGING_DIR}"
+    if [ -f "${STAGING_DIR}/libtermux_bitnet.so" ]; then
+        cp "${STAGING_DIR}/libtermux_bitnet.so" "${LIB_DIR}/"
         chmod 0755 "${LIB_DIR}/libtermux_bitnet.so"
+        echo "   -> [OK] Deployed pure-CPU C-ABI engine to ${LIB_DIR}/libtermux_bitnet.so"
     fi
-    if [ -f "build/termux-bitnet-cli" ]; then
-        mkdir -p "${BIN_DIR}"
-        cp build/termux-bitnet-cli "${BIN_DIR}/"
+    if [ -f "${STAGING_DIR}/termux-bitnet-cli" ]; then
+        cp "${STAGING_DIR}/termux-bitnet-cli" "${BIN_DIR}/"
         chmod 0755 "${BIN_DIR}/termux-bitnet-cli"
+        ln -sf "${BIN_DIR}/termux-bitnet-cli" "${BIN_DIR}/termux-bitnet-cli-cpu" 2>/dev/null || true
+        echo "   -> [OK] Deployed native standalone CLI to ${BIN_DIR}/termux-bitnet-cli"
     fi
+    rm -rf "${STAGING_DIR}"
+else
+    echo "[ERROR] Failed to fetch verified prebuilt binary bundle from ${PREBUILT_URL}"
+    exit 1
 fi
 
 # 7. Node.js Dual Engine CLI Installation

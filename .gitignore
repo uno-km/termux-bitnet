@@ -38,6 +38,7 @@ wheels/
 .installed.cfg
 *.tgz
 *.tar.gz
+releases/
 
 # Pytest / Test artifacts
 .pytest_cache/

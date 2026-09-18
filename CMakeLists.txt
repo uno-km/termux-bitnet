@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(termux_bitnet VERSION 1.4.0 LANGUAGES C CXX)
+project(termux_bitnet VERSION 1.4.1 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
@@ -47,22 +47,23 @@ set(BITNET_CORE_SOURCES
     src/c_api.cpp
 )
 
+# RPATH Isolation conforming to Golden Link Order
+set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib:$ORIGIN:/data/data/com.termux/files/usr/lib")
+set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
+
 # Vulkan GPU Compute Acceleration Option (Default OFF: core is clean CPU; GPU delegated to ameva-runtime)
 option(GGML_VULKAN "Enable native Vulkan GPU compute engine" OFF)
 
 if(GGML_VULKAN)
     add_definitions(-DGGML_USE_VULKAN=1)
     include_directories(${CMAKE_CURRENT_SOURCE_DIR}/runtime_gpu/src)
-    find_library(VULKAN_LIB vulkan PATHS /data/data/com.termux/files/usr/lib /system/lib64 /vendor/lib64)
-    if(NOT VULKAN_LIB)
-        set(VULKAN_LIB "vulkan")
-    endif()
+    find_package(Vulkan REQUIRED)
     list(APPEND BITNET_CORE_SOURCES
         runtime_gpu/src/core/vulkan_loader.cpp
         runtime_gpu/src/core/vulkan_bitnet_engine.cpp
         runtime_gpu/src/quirks/gpu_quirks.cpp
     )
-    set(EXTRA_VULKAN_LIBS ${VULKAN_LIB})
+    set(EXTRA_VULKAN_LIBS Vulkan::Vulkan)
 endif()
 
 # Shared Library for Python SDK & C/C++ Embedding
@@ -86,4 +87,7 @@ install(TARGETS termux_bitnet
     ARCHIVE DESTINATION lib
     RUNTIME DESTINATION bin
 )
+if(BUILD_CLI)
+    install(TARGETS termux-bitnet-cli RUNTIME DESTINATION bin)
+endif()
 install(FILES include/termux_bitnet.h DESTINATION include)

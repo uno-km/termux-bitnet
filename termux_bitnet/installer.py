@@ -22,25 +22,15 @@ def get_candidate_library_urls() -> list[str]:
 
     if custom_base:
         base = custom_base.rstrip("/")
-        urls.append(f"{base}/libtermux_bitnet-arm64-android.so")
         urls.append(f"{base}/libtermux_bitnet.so")
     if custom_tag:
         tag = custom_tag if custom_tag.startswith("v") else f"v{custom_tag}"
-        urls.append(f"https://github.com/{GITHUB_REPO}/releases/download/{tag}/libtermux_bitnet-arm64-android.so")
         urls.append(f"https://github.com/{GITHUB_REPO}/releases/download/{tag}/libtermux_bitnet.so")
 
     # Current version SSOT
     current_tag = f"v{__version__}"
-    urls.append(f"https://github.com/{GITHUB_REPO}/releases/download/{current_tag}/libtermux_bitnet-arm64-android.so")
     urls.append(f"https://github.com/{GITHUB_REPO}/releases/download/{current_tag}/libtermux_bitnet.so")
-
-    # Latest release endpoints
-    urls.append(f"https://github.com/{GITHUB_REPO}/releases/latest/download/libtermux_bitnet-arm64-android.so")
     urls.append(f"https://github.com/{GITHUB_REPO}/releases/latest/download/libtermux_bitnet.so")
-
-    # Verified historical release fallbacks (verified HTTP 200)
-    urls.append(f"https://github.com/{GITHUB_REPO}/releases/download/v1.0.16/libtermux_bitnet-arm64-android.so")
-    urls.append(f"https://github.com/{GITHUB_REPO}/releases/download/v1.0.15/libtermux_bitnet-arm64-android.so")
 
     return urls
 
@@ -57,7 +47,7 @@ def install_prebuilt_library() -> bool:
     staging_so = staging_dir / "libtermux_bitnet.so"
 
     print("=========================================================")
-    print("  termux-bitnet One-Click Engine Provisioning")
+    print(f"  termux-bitnet Pure-CPU Engine Provisioning (v{__version__})")
     print("=========================================================")
     print(f"  Target: {target_so}")
 
@@ -79,7 +69,7 @@ def install_prebuilt_library() -> bool:
                         shutil.move(str(staging_so), str(target_so))
                         target_so.chmod(0o755)
                         shutil.rmtree(staging_dir, ignore_errors=True)
-                        print(f"Successfully provisioned native C++ engine to {target_so} ({len(data)} bytes, ELF verified).")
+                        print(f"Successfully provisioned native pure-CPU engine to {target_so} ({len(data)} bytes, ELF verified).")
                         return True
                     elif data[:4] != b"\x7fELF":
                         print(f"[-] Downloaded file from {url} is not a valid ELF shared object.")
@@ -89,27 +79,7 @@ def install_prebuilt_library() -> bool:
                 staging_so.unlink(missing_ok=True)
 
     shutil.rmtree(staging_dir, ignore_errors=True)
-
-    # Fallback to local cmake compilation if tools exist
-    print("[*] Attempting local compilation with CMake / Clang...")
-    import subprocess
-    root_dir = Path(__file__).parent.parent
-    if (root_dir / "CMakeLists.txt").exists():
-        build_dir = root_dir / "build"
-        build_dir.mkdir(exist_ok=True)
-        try:
-            subprocess.check_call(["cmake", "-B", str(build_dir), "-DCMAKE_BUILD_TYPE=Release", str(root_dir)])
-            subprocess.check_call(["cmake", "--build", str(build_dir), "-j4"])
-            built_so = build_dir / "libtermux_bitnet.so"
-            if built_so.exists():
-                shutil.copy2(built_so, target_so)
-                target_so.chmod(0o755)
-                print(f"Successfully built native engine locally and installed to {target_so}.")
-                return True
-        except Exception as e:
-            print(f"[-] Local build failed: {e}")
-
-    print("Failed to provision native library. Please ensure clang and cmake are installed.")
+    print("[-] Failed to provision prebuilt native library from GitHub Releases endpoints.")
     return False
 
 
