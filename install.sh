@@ -6,12 +6,17 @@
 # ==============================================================================
 set -euo pipefail
 
-VERSION="${TERMUX_BITNET_VERSION:-1.4.4}"
+if [ -z "${TERMUX_BITNET_VERSION:-}" ]; then
+    VERSION="$(curl -sL https://api.github.com/repos/uno-km/termux-bitnet/releases/latest 2>/dev/null | grep '"tag_name":' | head -n 1 | cut -d '"' -f 4 | sed 's/^v//')"
+    VERSION="${VERSION:-latest}"
+else
+    VERSION="${TERMUX_BITNET_VERSION}"
+fi
 REPO="uno-km/termux-bitnet"
 ARCH="$(uname -m)"
 
 echo "================================================================="
-echo " [AMEVA Foundation] termux-bitnet Universal Installer v${VERSION}"
+echo " [AMEVA Foundation] termux-bitnet Universal Installer (${VERSION})"
 echo "================================================================="
 echo "-> Detected Architecture: ${ARCH}"
 
@@ -40,11 +45,15 @@ if [ "${IS_TERMUX}" = "true" ] && command -v termux-setup-storage >/dev/null 2>&
     fi
 fi
 
-# 3. System Package Dependencies (Pure-CPU Zero-Compilation: No Clang/CMake needed)
+# 3. System Runtime & Compilers
 MISSING_PKGS=""
-command -v python >/dev/null 2>&1 || MISSING_PKGS="${MISSING_PKGS} python"
-command -v curl >/dev/null 2>&1 || MISSING_PKGS="${MISSING_PKGS} curl"
-command -v tar >/dev/null 2>&1 || MISSING_PKGS="${MISSING_PKGS} tar"
+for cmd_pkg in "python:python" "clang:clang" "cmake:cmake" "git:git" "curl:curl"; do
+    CMD="${cmd_pkg%%:*}"
+    PKG="${cmd_pkg##*:}"
+    if ! command -v "${CMD}" >/dev/null 2>&1; then
+        MISSING_PKGS="${MISSING_PKGS} ${PKG}"
+    fi
+done
 
 if [ -n "${MISSING_PKGS}" ]; then
     echo "-> [1/4] Ensuring missing runtimes (${MISSING_PKGS})..."
@@ -56,52 +65,66 @@ if [ -n "${MISSING_PKGS}" ]; then
 fi
 
 # 4. Standard Python SDK Installation
-echo "-> [2/4] Installing termux-bitnet Python SDK (v${VERSION})..."
+echo "-> [2/4] Installing termux-bitnet Python SDK..."
 if [ -f "pyproject.toml" ]; then
     python -m pip install --no-build-isolation -e .
 else
-    python -m pip install termux-bitnet==${VERSION} || python -m pip install termux-bitnet
+    python -m pip install --upgrade termux-bitnet
 fi
 
 # 5. Native Pure-CPU Compute Engine & 1-Click Stream Extraction
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/termux-bitnet-inst.XXXXXXXX")"
 trap 'rm -rf "${TMP_DIR}"' EXIT INT TERM HUP
 
-echo "-> [3/4] Provisioning 100% Zero-Compilation Pure-CPU ARM64 Native Engine (v${VERSION})..."
+echo "-> [3/4] Provisioning 100% Zero-Compilation Pure-CPU ARM64 Native Engine..."
 CANDIDATE_URLS=(
-    "https://github.com/${REPO}/releases/download/v${VERSION}/termux-bitnet-v${VERSION}-android-aarch64.tar.gz"
-    "https://github.com/${REPO}/releases/download/v1.4.0/termux-bitnet-v1.4.0-android-aarch64.tar.gz"
-    "https://github.com/${REPO}/releases/latest/download/termux-bitnet-v1.4.0-android-aarch64.tar.gz"
+    "https://github.com/${REPO}/releases/latest/download/libtermux_bitnet.so"
+    "https://github.com/${REPO}/releases/latest/download/termux-bitnet-android-aarch64.tar.gz"
 )
+if [ "${VERSION}" != "latest" ]; then
+    CANDIDATE_URLS+=(
+        "https://github.com/${REPO}/releases/download/v${VERSION}/libtermux_bitnet.so"
+        "https://github.com/${REPO}/releases/download/v${VERSION}/termux-bitnet-v${VERSION}-android-aarch64.tar.gz"
+    )
+fi
+
 PREBUILT_TAR="${TMP_DIR}/termux-bitnet.tar.gz"
 STAGING_DIR="${TMP_DIR}/.staging"
 
 mkdir -p "${STAGING_DIR}" "${LIB_DIR}" "${BIN_DIR}"
 FETCH_SUCCESS=false
 for URL in "${CANDIDATE_URLS[@]}"; do
-    if curl -sSL -f --connect-timeout 10 --retry 2 -o "${PREBUILT_TAR}" "${URL}"; then
-        FETCH_SUCCESS=true
-        echo "   -> [OK] Successfully fetched prebuilt native bundle from: ${URL}"
-        break
+    if [[ "${URL}" == *.so ]]; then
+        if curl -sSL -f --connect-timeout 10 --retry 2 -o "${LIB_DIR}/libtermux_bitnet.so" "${URL}"; then
+            chmod 0755 "${LIB_DIR}/libtermux_bitnet.so"
+            FETCH_SUCCESS=true
+            echo "   -> [OK] Successfully fetched prebuilt native library from: ${URL}"
+            break
+        fi
+    else
+        if curl -sSL -f --connect-timeout 10 --retry 2 -o "${PREBUILT_TAR}" "${URL}"; then
+            tar -xzf "${PREBUILT_TAR}" -C "${STAGING_DIR}" 2>/dev/null || true
+            if [ -f "${STAGING_DIR}/libtermux_bitnet.so" ]; then
+                cp "${STAGING_DIR}/libtermux_bitnet.so" "${LIB_DIR}/"
+                chmod 0755 "${LIB_DIR}/libtermux_bitnet.so"
+                echo "   -> [OK] Deployed pure-CPU C-ABI engine to ${LIB_DIR}/libtermux_bitnet.so"
+            fi
+            if [ -f "${STAGING_DIR}/termux-bitnet-cli" ]; then
+                cp "${STAGING_DIR}/termux-bitnet-cli" "${BIN_DIR}/"
+                chmod 0755 "${BIN_DIR}/termux-bitnet-cli"
+                ln -sf "${BIN_DIR}/termux-bitnet-cli" "${BIN_DIR}/termux-bitnet-cpu" 2>/dev/null || true
+                ln -sf "${BIN_DIR}/termux-bitnet-cli" "${BIN_DIR}/termux-bitnet-cli-cpu" 2>/dev/null || true
+                echo "   -> [OK] Deployed native standalone CLI to ${BIN_DIR}/termux-bitnet-cli"
+            fi
+            rm -rf "${STAGING_DIR}"
+            FETCH_SUCCESS=true
+            echo "   -> [OK] Successfully extracted prebuilt native bundle from: ${URL}"
+            break
+        fi
     fi
 done
 
-if [ "${FETCH_SUCCESS}" = "true" ]; then
-    tar -xzf "${PREBUILT_TAR}" -C "${STAGING_DIR}"
-    if [ -f "${STAGING_DIR}/libtermux_bitnet.so" ]; then
-        cp "${STAGING_DIR}/libtermux_bitnet.so" "${LIB_DIR}/"
-        chmod 0755 "${LIB_DIR}/libtermux_bitnet.so"
-        echo "   -> [OK] Deployed pure-CPU C-ABI engine to ${LIB_DIR}/libtermux_bitnet.so"
-    fi
-    if [ -f "${STAGING_DIR}/termux-bitnet-cli" ]; then
-        cp "${STAGING_DIR}/termux-bitnet-cli" "${BIN_DIR}/"
-        chmod 0755 "${BIN_DIR}/termux-bitnet-cli"
-        ln -sf "${BIN_DIR}/termux-bitnet-cli" "${BIN_DIR}/termux-bitnet-cpu" 2>/dev/null || true
-        ln -sf "${BIN_DIR}/termux-bitnet-cli" "${BIN_DIR}/termux-bitnet-cli-cpu" 2>/dev/null || true
-        echo "   -> [OK] Deployed native standalone CLI to ${BIN_DIR}/termux-bitnet-cli"
-    fi
-    rm -rf "${STAGING_DIR}"
-else
+if [ "${FETCH_SUCCESS}" != "true" ]; then
     echo "[ERROR] Failed to fetch verified prebuilt binary bundle from candidate release mirrors."
     exit 1
 fi

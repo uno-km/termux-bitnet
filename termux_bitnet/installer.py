@@ -6,20 +6,32 @@ import shutil
 import urllib.request
 from pathlib import Path
 
-try:
-    from . import __version__
-except Exception:
-    __version__ = "1.4.0"
+from typing import Optional
+
+def _resolve_package_version() -> Optional[str]:
+    """Dynamically resolve current installed package version without static fallback."""
+    try:
+        from . import __version__
+        if __version__:
+            return __version__
+    except Exception:
+        pass
+    try:
+        import importlib.metadata
+        return importlib.metadata.version("termux-bitnet")
+    except Exception:
+        return None
 
 GITHUB_REPO = "uno-km/termux-bitnet"
 
 
 def get_candidate_library_urls() -> list[str]:
-    """Generate dynamic SSOT candidate URLs with multi-tier fallback."""
+    """Generate dynamic SSOT candidate URLs with 3-tier fallback."""
     urls = []
     custom_base = os.environ.get("TERMUX_BITNET_RELEASE_BASE", "").strip()
     custom_tag = os.environ.get("TERMUX_BITNET_RELEASE_TAG", "").strip()
 
+    # Tier 1: Explicit environment overrides
     if custom_base:
         base = custom_base.rstrip("/")
         urls.append(f"{base}/libtermux_bitnet.so")
@@ -27,10 +39,13 @@ def get_candidate_library_urls() -> list[str]:
         tag = custom_tag if custom_tag.startswith("v") else f"v{custom_tag}"
         urls.append(f"https://github.com/{GITHUB_REPO}/releases/download/{tag}/libtermux_bitnet.so")
 
-    # Current version SSOT
-    current_tag = f"v{__version__}"
-    urls.append(f"https://github.com/{GITHUB_REPO}/releases/download/{current_tag}/libtermux_bitnet.so")
+    # Tier 2: GitHub Releases latest canonical endpoint (Zero-Hardcoding SSOT)
     urls.append(f"https://github.com/{GITHUB_REPO}/releases/latest/download/libtermux_bitnet.so")
+
+    # Tier 3: Current installed package dynamic version matching
+    ver = _resolve_package_version()
+    if ver:
+        urls.append(f"https://github.com/{GITHUB_REPO}/releases/download/v{ver}/libtermux_bitnet.so")
 
     return urls
 
@@ -46,8 +61,9 @@ def install_prebuilt_library() -> bool:
     staging_dir.mkdir(parents=True, exist_ok=True)
     staging_so = staging_dir / "libtermux_bitnet.so"
 
+    ver = _resolve_package_version() or "latest"
     print("=========================================================")
-    print(f"  termux-bitnet Pure-CPU Engine Provisioning (v{__version__})")
+    print(f"  termux-bitnet Pure-CPU Engine Provisioning (v{ver})")
     print("=========================================================")
     print(f"  Target: {target_so}")
 
@@ -57,7 +73,7 @@ def install_prebuilt_library() -> bool:
         try:
             req = urllib.request.Request(
                 url,
-                headers={"User-Agent": f"termux-bitnet-installer/{__version__} (Android; ARM64)"}
+                headers={"User-Agent": f"termux-bitnet-installer/{ver} (Android; ARM64)"}
             )
             with urllib.request.urlopen(req, timeout=15) as resp:
                 if resp.status == 200:
