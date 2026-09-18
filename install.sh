@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# termux-bitnet: Universal Dynamic One-Line Bootstrap Installer (v1.4.1)
+# termux-bitnet: Universal Dynamic One-Line Bootstrap Installer (v1.4.2)
 # Open-Source under Apache License 2.0 (AMEVA Foundation)
 # Usage: curl -sL https://raw.githubusercontent.com/uno-km/termux-bitnet/main/install.sh | bash
 # ==============================================================================
 set -euo pipefail
 
-VERSION="${TERMUX_BITNET_VERSION:-1.4.1}"
+VERSION="${TERMUX_BITNET_VERSION:-1.4.2}"
 REPO="uno-km/termux-bitnet"
 ARCH="$(uname -m)"
 
