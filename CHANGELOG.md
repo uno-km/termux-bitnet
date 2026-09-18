@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.5] - 2026-09-18
+
+### Changed & Hardened
+- **Zero-Hardcoding Dynamic Latest-First Provisioning Architecture**:
+  - Completely purged hardcoded fallback version strings (`1.4.0`) from `install.sh` and `termux_bitnet/installer.py`.
+  - Implemented dynamic GitHub API release querying and dynamic package resolution (`_resolve_package_version`).
+  - Prioritized invariant `releases/latest/download/libtermux_bitnet.so` and `termux-bitnet-android-aarch64.tar.gz` endpoints.
+  - Upgraded PyPI installation command to use `--upgrade` flag.
+  - Synchronized versions across `package.json`, `pyproject.toml`, and `termux_bitnet/__init__.py` to `1.4.5`.
+
 ## [1.4.0] - 2026-09-07
 
 ### Added
