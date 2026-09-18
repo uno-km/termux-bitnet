@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# termux-bitnet: Universal Dynamic One-Line Bootstrap Installer (v1.4.3)
+# termux-bitnet: Universal Dynamic One-Line Bootstrap Installer (v1.4.4)
 # Open-Source under Apache License 2.0 (AMEVA Foundation)
 # Usage: curl -sL https://raw.githubusercontent.com/uno-km/termux-bitnet/main/install.sh | bash
 # ==============================================================================
 set -euo pipefail
 
-VERSION="${TERMUX_BITNET_VERSION:-1.4.3}"
+VERSION="${TERMUX_BITNET_VERSION:-1.4.4}"
 REPO="uno-km/termux-bitnet"
 ARCH="$(uname -m)"
 
@@ -41,12 +41,18 @@ if [ "${IS_TERMUX}" = "true" ] && command -v termux-setup-storage >/dev/null 2>&
 fi
 
 # 3. System Package Dependencies (Pure-CPU Zero-Compilation: No Clang/CMake needed)
-if [ "${IS_TERMUX}" = "true" ] && command -v pkg >/dev/null 2>&1; then
-    echo "-> [1/4] Ensuring core runtimes (Python, Node.js, Curl, Tar)..."
-    pkg install -y python nodejs curl tar 2>/dev/null || true
-elif command -v apt-get >/dev/null 2>&1; then
-    echo "-> [1/4] Ensuring core runtimes..."
-    apt-get update -y && apt-get install -y python3 python3-pip nodejs npm curl tar
+MISSING_PKGS=""
+command -v python >/dev/null 2>&1 || MISSING_PKGS="${MISSING_PKGS} python"
+command -v curl >/dev/null 2>&1 || MISSING_PKGS="${MISSING_PKGS} curl"
+command -v tar >/dev/null 2>&1 || MISSING_PKGS="${MISSING_PKGS} tar"
+
+if [ -n "${MISSING_PKGS}" ]; then
+    echo "-> [1/4] Ensuring missing runtimes (${MISSING_PKGS})..."
+    if [ "${IS_TERMUX}" = "true" ] && command -v pkg >/dev/null 2>&1; then
+        pkg install -y ${MISSING_PKGS} 2>/dev/null || true
+    elif command -v apt-get >/dev/null 2>&1; then
+        apt-get update -y && apt-get install -y ${MISSING_PKGS} 2>/dev/null || true
+    fi
 fi
 
 # 4. Standard Python SDK Installation
@@ -90,7 +96,7 @@ if [ "${FETCH_SUCCESS}" = "true" ]; then
     if [ -f "${STAGING_DIR}/termux-bitnet-cli" ]; then
         cp "${STAGING_DIR}/termux-bitnet-cli" "${BIN_DIR}/"
         chmod 0755 "${BIN_DIR}/termux-bitnet-cli"
-        ln -sf "${BIN_DIR}/termux-bitnet-cli" "${BIN_DIR}/termux-bitnet" 2>/dev/null || true
+        ln -sf "${BIN_DIR}/termux-bitnet-cli" "${BIN_DIR}/termux-bitnet-cpu" 2>/dev/null || true
         ln -sf "${BIN_DIR}/termux-bitnet-cli" "${BIN_DIR}/termux-bitnet-cli-cpu" 2>/dev/null || true
         echo "   -> [OK] Deployed native standalone CLI to ${BIN_DIR}/termux-bitnet-cli"
     fi
