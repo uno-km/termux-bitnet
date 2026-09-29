@@ -387,10 +387,8 @@ class BitNetEngine:
 
         if get_vulkan_env_fn:
             env = get_vulkan_env_fn(env)
-            if lib_dir and lib_dir not in env.get("LD_LIBRARY_PATH", ""):
-                env["LD_LIBRARY_PATH"] = f"{lib_dir}:{env.get('LD_LIBRARY_PATH', '')}"
-        else:
-            env["LD_LIBRARY_PATH"] = f"{lib_dir}:{env.get('LD_LIBRARY_PATH', '')}"
+        # Note: Standalone CLI binaries embed DT_RUNPATH. $PREFIX/lib or bin dirs are strictly
+        # NOT injected into LD_LIBRARY_PATH to adhere to Gate 1 Zero-Collision Rule on Android 15.
 
         proc = None
         has_yielded = False

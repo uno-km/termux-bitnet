@@ -334,6 +334,8 @@ def main():
     p_run.add_argument("-p", "--prompt", default=None, help="Input prompt text")
     p_run.add_argument("-f", "--file", help="Path to prompt text file")
     p_run.add_argument("-d", "--device", default="auto", choices=["auto", "gpu", "vulkan", "cpu"], help="Hardware acceleration backend (default: auto)")
+    p_run.add_argument("--gpu", action="store_const", const="gpu", dest="device", help="Force GPU Vulkan acceleration")
+    p_run.add_argument("--cpu", action="store_const", const="cpu", dest="device", help="Force pure CPU execution")
     p_run.add_argument("-t", "--threads", type=int, default=8, help="Worker threads (default: 8)")
     p_run.add_argument("-c", "--ctx-size", type=int, default=2048, help="Context size (default: 2048)")
     p_run.add_argument("-b", "--batch-size", type=int, default=512, help="Batch size (default: 512)")
