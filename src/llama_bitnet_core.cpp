@@ -1121,16 +1121,22 @@ static void forward_swiglu(float* out, const float* ffn_norm, const BitNetLayerW
     bitnet_gemv(gate, lay.w_gate, lay.w_gate_type, x_q8.data(), ffn_norm, dequant, cfg.n_embd, cfg.n_ffn, lay.scale_w_gate);
     bitnet_gemv(up, lay.w_up, lay.w_up_type, x_q8.data(), ffn_norm, dequant, cfg.n_embd, cfg.n_ffn, lay.scale_w_up);
 
-    // BitNet b1.58-2B: Squared ReLU (relu2) activation: relu(gate)^2 * up
-    for (uint32_t i = 0; i < cfg.n_ffn; ++i) {
-        float g = gate[i];
-        float r = g > 0.0f ? g : 0.0f;
-        gate[i] = (r * r) * up[i];
-    }
-
-    // BitNet Sub-LayerNorm for FFN intermediate
+    // Dynamic activation function:
+    // If model has ffn_sub_norm (Microsoft BitNet b1.58 2B), use Squared ReLU (relu2) + Sub-LayerNorm.
+    // If model lacks ffn_sub_norm (Falcon-E-1B, Falcon3-7B, LLaMA-BitNet), use standard SiLU (SwiGLU).
     if (lay.ffn_sub_norm) {
+        for (uint32_t i = 0; i < cfg.n_ffn; ++i) {
+            float g = gate[i];
+            float r = g > 0.0f ? g : 0.0f;
+            gate[i] = (r * r) * up[i];
+        }
         rms_norm(gate, gate, lay.ffn_sub_norm, lay.ffn_sub_norm_type, cfg.n_ffn, cfg.norm_eps);
+    } else {
+        for (uint32_t i = 0; i < cfg.n_ffn; ++i) {
+            float g = gate[i];
+            float silu = g / (1.0f + std::exp(-g));
+            gate[i] = silu * up[i];
+        }
     }
 
     // Down projection: gate_intermediate * w_down
