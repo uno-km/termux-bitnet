@@ -29,6 +29,10 @@ class BitNetConfig:
     presence_penalty: float = 0.0
     flash_attn: bool = False
     verbose: bool = False
+    eos_token_id: Optional[int] = None
+    chat_template: Optional[str] = None
+    prompt_prefix: Optional[str] = None
+    prompt_suffix: Optional[str] = None
 
     def __post_init__(self):
         """Auto-discover cached model if model_path is not explicitly provided."""

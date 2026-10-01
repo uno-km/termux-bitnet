@@ -52,6 +52,7 @@ typedef struct {
     float presence_penalty;      /**< Presence penalty coefficient (default: 0.0) */
     bool flash_attn;             /**< Enable flash attention acceleration (default: false) */
     bool verbose;                /**< Enable verbose diagnostic logs */
+    int32_t eos_token_id;        /**< Custom EOS token ID override (-1 = default/auto, default: -1) */
 } bitnet_params_t;
 
 /** Token generation callback for streaming responses. Return false to abort early. */

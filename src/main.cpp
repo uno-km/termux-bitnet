@@ -35,6 +35,10 @@ static void print_usage(std::ostream& out) {
         << "  -ngl <int>                 GPU/NPU offload layers (default: 0)\n"
         << "  -fa, --flash-attn          Enable Flash Attention\n"
         << "  --system-prompt <text>     System prompt prefix\n"
+        << "  --chat-template <fmt>      Chat template format ('none', 'chatml', 'llama3')\n"
+        << "  --prompt-prefix <str>      Custom prompt prefix string\n"
+        << "  --prompt-suffix <str>      Custom prompt suffix string\n"
+        << "  --eos-token-id <int>       Custom EOS token ID override\n"
         << "  -r, --stop <tokens>        Comma-separated stop sequences\n"
         << "  -v, --verbose              Enable diagnostic logging\n"
         << "  -h, --help                 Show this help manual\n\n"
@@ -58,6 +62,9 @@ static bool stream_print_cb(const char* token_str, int32_t token_id, void* user_
 int main(int argc, char** argv) {
     bitnet_params_t params = bitnet_default_params();
     std::string prompt = "";
+    std::string chat_template = "none";
+    std::string prompt_prefix = "";
+    std::string prompt_suffix = "";
     int32_t n_predict = 128;
 
     char hw_info[256];
@@ -127,6 +134,14 @@ int main(int argc, char** argv) {
             params.system_prompt = argv[++i];
         } else if ((arg == "-r" || arg == "--stop") && i + 1 < argc) {
             params.stop_tokens = argv[++i];
+        } else if (arg == "--chat-template" && i + 1 < argc) {
+            chat_template = argv[++i];
+        } else if (arg == "--prompt-prefix" && i + 1 < argc) {
+            prompt_prefix = argv[++i];
+        } else if (arg == "--prompt-suffix" && i + 1 < argc) {
+            prompt_suffix = argv[++i];
+        } else if (arg == "--eos-token-id" && i + 1 < argc) {
+            params.eos_token_id = std::atoi(argv[++i]);
         } else if (arg == "-v" || arg == "--verbose") {
             params.verbose = true;
         } else {
@@ -159,6 +174,22 @@ int main(int argc, char** argv) {
         return 2; // EXIT_ARG_ERROR
     }
 
+    // Apply user-specified prompt templates and prefix/suffix
+    std::string full_prompt = prompt;
+    if (chat_template == "chatml") {
+        full_prompt = "<|im_start|>user\n" + full_prompt + "<|im_end|>\n<|im_start|>assistant\n";
+        if (!params.stop_tokens || std::strlen(params.stop_tokens) == 0) {
+            params.stop_tokens = "<|im_end|>,<|end_of_text|>";
+        }
+    } else if (chat_template == "llama3") {
+        full_prompt = "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n" + full_prompt + "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n";
+        if (!params.stop_tokens || std::strlen(params.stop_tokens) == 0) {
+            params.stop_tokens = "<|eot_id|>,<|end_of_text|>";
+        }
+    }
+    if (!prompt_prefix.empty()) full_prompt = prompt_prefix + full_prompt;
+    if (!prompt_suffix.empty()) full_prompt = full_prompt + prompt_suffix;
+
     std::cout << "=========================================================" << std::endl;
     std::cout << "  termux-bitnet: Native 1.58-bit Inference Engine" << std::endl;
     std::cout << "  " << hw_info << std::endl;
@@ -173,7 +204,7 @@ int main(int argc, char** argv) {
     }
 
     std::cout << "[Response]: " << std::flush;
-    bitnet_generate_stream(ctx, prompt.c_str(), n_predict, stream_print_cb, nullptr);
+    bitnet_generate_stream(ctx, full_prompt.c_str(), n_predict, stream_print_cb, nullptr);
     std::cout << std::endl;
 
     double p_eval_ms = 0.0, eval_ms = 0.0, tps = 0.0;

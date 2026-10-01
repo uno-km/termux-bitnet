@@ -134,6 +134,7 @@ bitnet_params_t bitnet_default_params(void) {
     p.presence_penalty = 0.0f;
     p.flash_attn = false;
     p.verbose = false;
+    p.eos_token_id = -1;
     return p;
 }
 
@@ -582,7 +583,7 @@ bitnet_context_t bitnet_init(const bitnet_params_t* params) {
             }
 
             size_t total_weight_bytes = current_offset;
-            engine->AllocateModelBuffers(total_weight_bytes, max_dim, max_dim, ctx->config.n_layers, ctx->config.n_ctx);
+            engine->AllocateModelBuffers(total_weight_bytes, max_dim, max_dim, ctx->config.n_layers, ctx->config.n_ctx, ctx->config.n_kv_heads, ctx->config.head_dim);
 
             // Upload all offloaded layer weights into permanent GPU buffer ONCE
             for (int32_t l = 0; l < offloaded_layers; ++l) {
@@ -721,6 +722,7 @@ int32_t bitnet_set_params(bitnet_context_t ctx, const bitnet_params_t* params) {
         ctx->params.seed = params->seed;
         ctx->rng.seed(params->seed);
     }
+    ctx->params.eos_token_id = params->eos_token_id;
     if (params->stop_tokens && std::strlen(params->stop_tokens) > 0) {
         ctx->params.stop_tokens = params->stop_tokens;
         ctx->stop_words.clear();
@@ -1199,11 +1201,20 @@ int32_t bitnet_eval(bitnet_context_t ctx, const int32_t* tokens, int32_t n_token
                 gpu_offsets[l].offset_w_up = lay.gpu_offset_w_up;
                 gpu_offsets[l].offset_ffn_sub_norm = lay.gpu_offset_ffn_sub_norm;
                 gpu_offsets[l].offset_w_down = lay.gpu_offset_w_down;
+
+                gpu_offsets[l].scale_wq = lay.scale_wq;
+                gpu_offsets[l].scale_wk = lay.scale_wk;
+                gpu_offsets[l].scale_wv = lay.scale_wv;
+                gpu_offsets[l].scale_wo = lay.scale_wo;
+                gpu_offsets[l].scale_w_gate = lay.scale_w_gate;
+                gpu_offsets[l].scale_w_up = lay.scale_w_up;
+                gpu_offsets[l].scale_w_down = lay.scale_w_down;
             }
 
             engine->DispatchFullTokenChain((uint32_t)pos, x.data(), x.data(),
                                            gpu_offsets.data(), (uint32_t)offloaded_layers,
                                            q_dim, kv_dim, cfg.n_embd, cfg.n_ffn,
+                                           cfg.head_dim, cfg.n_heads, cfg.n_kv_heads,
                                            cfg.rope_theta, cfg.norm_eps, 1.0f);
 #endif
         }
@@ -1475,14 +1486,16 @@ int32_t bitnet_generate_stream(bitnet_context_t ctx, const char* prompt, int32_t
     char token_buf[512];
     for (int32_t i = 0; i < max_new_tokens; ++i) {
         int32_t next_tok = bitnet_sample(ctx);
+        if (ctx->params.eos_token_id >= 0 && next_tok == ctx->params.eos_token_id) break;
         if (next_tok == ctx->vocab.eos_id || next_tok == 128009 || next_tok == 128001) break;
 
         bitnet_token_to_str(ctx, next_tok, token_buf, sizeof(token_buf));
         if (std::strlen(token_buf) == 0) break;
 
         bool stop_triggered = false;
+        std::string cur_tok_str(token_buf);
         for (const auto& sw : ctx->stop_words) {
-            if (std::strcmp(token_buf, sw.c_str()) == 0) {
+            if (std::strcmp(token_buf, sw.c_str()) == 0 || cur_tok_str.find(sw) != std::string::npos) {
                 stop_triggered = true;
                 break;
             }

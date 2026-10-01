@@ -38,6 +38,7 @@ class CBitNetParams(ctypes.Structure):
         ("presence_penalty", ctypes.c_float),
         ("flash_attn", ctypes.c_bool),
         ("verbose", ctypes.c_bool),
+        ("eos_token_id", ctypes.c_int32),
     ]
 
 
@@ -254,6 +255,7 @@ class BitNetEngine:
         c_params.presence_penalty = float(self.config.presence_penalty if self.config.presence_penalty is not None else 0.0)
         c_params.flash_attn = bool(self.config.flash_attn)
         c_params.verbose = bool(self.config.verbose)
+        c_params.eos_token_id = int(self.config.eos_token_id if self.config.eos_token_id is not None else -1)
 
         self._ctx = self._lib.bitnet_init(ctypes.byref(c_params))
         if not self._ctx and c_params.n_gpu_layers > 0 and getattr(self, "_requested_device", "auto") == "auto":
@@ -515,6 +517,7 @@ class BitNetEngine:
             c_params.presence_penalty = float(self.config.presence_penalty if self.config.presence_penalty is not None else 0.0)
             c_params.flash_attn = bool(self.config.flash_attn)
             c_params.verbose = bool(self.config.verbose)
+            c_params.eos_token_id = int(self.config.eos_token_id if self.config.eos_token_id is not None else -1)
             self._lib.bitnet_set_params(self._ctx, ctypes.byref(c_params))
 
         safe_prompt = unicodedata.normalize("NFC", prompt).encode("utf-8", errors="replace")

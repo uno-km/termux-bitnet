@@ -125,6 +125,30 @@ def cmd_run(args):
         print("Example:\n  termux-bitnet run -m ~/.cache/termux-bitnet/models/bitnet-2b.gguf -p \"Explain 1-bit LLM:\"", file=sys.stderr)
         sys.exit(2)
 
+    # Apply user-specified prompt wrapping / templates
+    chat_template = getattr(args, "chat_template", "none") or "none"
+    if chat_template == "chatml":
+        prompt_text = f"<|im_start|>user\n{prompt_text}<|im_end|>\n<|im_start|>assistant\n"
+        extra_stops = ["<|im_end|>", "<|end_of_text|>"]
+        current_stops = [s.strip() for s in (args.stop or "").split(",") if s.strip()]
+        for es in extra_stops:
+            if es not in current_stops:
+                current_stops.append(es)
+        args.stop = ",".join(current_stops)
+    elif chat_template == "llama3":
+        prompt_text = f"<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n{prompt_text}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+        extra_stops = ["<|eot_id|>", "<|end_of_text|>"]
+        current_stops = [s.strip() for s in (args.stop or "").split(",") if s.strip()]
+        for es in extra_stops:
+            if es not in current_stops:
+                current_stops.append(es)
+        args.stop = ",".join(current_stops)
+
+    if getattr(args, "prompt_prefix", None):
+        prompt_text = args.prompt_prefix + prompt_text
+    if getattr(args, "prompt_suffix", None):
+        prompt_text = prompt_text + args.prompt_suffix
+
     # 2. Validate Model
     resolved_model = validate_model_path_or_exit(args.model)
 
@@ -151,6 +175,10 @@ def cmd_run(args):
         presence_penalty=args.presence_penalty,
         flash_attn=args.flash_attn,
         verbose=args.verbose,
+        eos_token_id=getattr(args, "eos_token_id", None),
+        chat_template=chat_template,
+        prompt_prefix=getattr(args, "prompt_prefix", None),
+        prompt_suffix=getattr(args, "prompt_suffix", None),
     )
 
     print("=========================================================")
@@ -355,6 +383,10 @@ def main():
     p_run.add_argument("-fa", "--flash-attn", action="store_true", help="Enable Flash Attention")
     p_run.add_argument("--system-prompt", help="System prompt prefix")
     p_run.add_argument("-r", "--stop", help="Comma-separated stop tokens")
+    p_run.add_argument("--chat-template", choices=["none", "chatml", "llama3"], default="none", help="Chat template format (none, chatml, llama3)")
+    p_run.add_argument("--prompt-prefix", default="", help="Custom prompt prefix string")
+    p_run.add_argument("--prompt-suffix", default="", help="Custom prompt suffix string")
+    p_run.add_argument("--eos-token-id", type=int, default=None, help="Custom EOS token ID override")
     p_run.add_argument("--verbose", action="store_true", help="Enable verbose logs")
     p_run.set_defaults(func=cmd_run)
 
@@ -381,6 +413,10 @@ def main():
     p_chat.add_argument("-fa", "--flash-attn", action="store_true", help="Enable Flash Attention")
     p_chat.add_argument("--system-prompt", help="System prompt prefix")
     p_chat.add_argument("-r", "--stop", help="Comma-separated stop tokens")
+    p_chat.add_argument("--chat-template", choices=["none", "chatml", "llama3"], default="none", help="Chat template format (none, chatml, llama3)")
+    p_chat.add_argument("--prompt-prefix", default="", help="Custom prompt prefix string")
+    p_chat.add_argument("--prompt-suffix", default="", help="Custom prompt suffix string")
+    p_chat.add_argument("--eos-token-id", type=int, default=None, help="Custom EOS token ID override")
     p_chat.add_argument("--verbose", action="store_true", help="Enable verbose logs")
     p_chat.set_defaults(func=cmd_chat)
 
