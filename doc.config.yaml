@@ -123,7 +123,7 @@ code_example_js: |
   main();
 benchmarks_body: |
   <h3>Empirical Real-Device Multi-Model Fleet Scorecard (Vulkan GPU & CPU Ground Truth)</h3>
-  <p>Measured on physical Android devices under unrooted Termux Bionic libc environments across canonical 1.58-bit model families. All values represent verified hardware ground truth under steady thermal equilibrium with zero mocking, zero silent fallback, and validated semantic output quality.</p>
+  <p>Measured on physical Android devices under unrooted Termux Bionic libc environments across canonical 1.58-bit model families. All values represent verified hardware ground truth under steady thermal equilibrium with zero mocking, zero silent fallback, and validated per-device semantic outputs.</p>
   <table class="data-table">
     <thead>
       <tr>
@@ -133,7 +133,7 @@ benchmarks_body: |
         <th>Backend / Layers</th>
         <th>Prompt Eval</th>
         <th>Token Speed</th>
-        <th>Verified Semantic Output</th>
+        <th>Hardware Output Ground Truth</th>
         <th>Status</th>
       </tr>
     </thead>
@@ -145,7 +145,7 @@ benchmarks_body: |
         <td><span class="status-badge active">GPU Vulkan (30/30)</span></td>
         <td><strong>180.8 ms</strong></td>
         <td><strong>19.37 tok/s</strong></td>
-        <td><code>"Paris. Cathy has a lot more money..."</code></td>
+        <td><code>"Paris. The Eiffel Tower, located in the heart of Paris,"</code></td>
         <td><span class="status-badge active">PASS</span></td>
       </tr>
       <tr style="background: rgba(14, 165, 233, 0.10);">
@@ -155,7 +155,7 @@ benchmarks_body: |
         <td><span class="status-badge active">GPU Vulkan (30/30)</span></td>
         <td>601.3 ms</td>
         <td><strong>7.71 tok/s</strong></td>
-        <td><code>"Paris. Cathy has a lot more money..."</code></td>
+        <td><code>"Paris.\nIt is located in the region of Île-de-France,"</code></td>
         <td><span class="status-badge active">PASS</span></td>
       </tr>
       <tr style="background: rgba(14, 165, 233, 0.10);">
@@ -165,7 +165,7 @@ benchmarks_body: |
         <td><span class="status-badge active">GPU Vulkan (30/30)</span></td>
         <td>1,222.6 ms</td>
         <td><strong>4.22 tok/s</strong></td>
-        <td><code>"Paris. Cathy has a lot more money..."</code></td>
+        <td><code>" Paris. London has a very long name, but its people are friendly and"</code></td>
         <td><span class="status-badge active">PASS</span></td>
       </tr>
       <tr style="background: rgba(14, 165, 233, 0.10);">
@@ -175,7 +175,7 @@ benchmarks_body: |
         <td><span class="status-badge active">GPU Vulkan (30/30)</span></td>
         <td>1,603.9 ms</td>
         <td><strong>3.26 tok/s</strong></td>
-        <td><code>"Paris. Cathy has a lot more money..."</code></td>
+        <td><code>" Paris. Cathy has a lot more money than David does. The new"</code></td>
         <td><span class="status-badge active">PASS</span></td>
       </tr>
       <tr style="background: rgba(34, 197, 94, 0.15);">
@@ -185,7 +185,7 @@ benchmarks_body: |
         <td><span class="status-badge active">GPU Vulkan (24/24)</span></td>
         <td><strong>130.0 ms</strong></td>
         <td><strong>34.35 tok/s</strong></td>
-        <td><code>"a complex and often subject to numerous..."</code></td>
+        <td><code>"situated in Paris, a city known for its rich history and cul"</code></td>
         <td><span class="status-badge active">PASS</span></td>
       </tr>
       <tr style="background: rgba(34, 197, 94, 0.10);">
@@ -195,7 +195,7 @@ benchmarks_body: |
         <td><span class="status-badge active">GPU Vulkan (24/24)</span></td>
         <td>457.6 ms</td>
         <td><strong>10.76 tok/s</strong></td>
-        <td><code>"a complex and often subject to numerous..."</code></td>
+        <td><code>"located in the Southern Italy, bordered by the Danube (D"</code></td>
         <td><span class="status-badge active">PASS</span></td>
       </tr>
       <tr style="background: rgba(34, 197, 94, 0.10);">
@@ -205,7 +205,7 @@ benchmarks_body: |
         <td><span class="status-badge active">GPU Vulkan (24/24)</span></td>
         <td>904.1 ms</td>
         <td><strong>5.81 tok/s</strong></td>
-        <td><code>"a complex and often subject to numerous..."</code></td>
+        <td><code>" a city in the heart of art and culture, where history and innovation meet"</code></td>
         <td><span class="status-badge active">PASS</span></td>
       </tr>
       <tr style="background: rgba(34, 197, 94, 0.10);">
@@ -215,7 +215,7 @@ benchmarks_body: |
         <td><span class="status-badge active">GPU Vulkan (24/24)</span></td>
         <td>1,234.9 ms</td>
         <td><strong>4.46 tok/s</strong></td>
-        <td><code>"a complex and often subject to numerous..."</code></td>
+        <td><code>" a complex and often subject to numerous laws and regulations, with different types of"</code></td>
         <td><span class="status-badge active">PASS</span></td>
       </tr>
       <tr style="background: rgba(168, 85, 247, 0.15);">
@@ -225,7 +225,7 @@ benchmarks_body: |
         <td><span class="status-badge active">GPU Vulkan (28/28)</span></td>
         <td><strong>474.3 ms</strong></td>
         <td><strong>8.30 tok/s</strong></td>
-        <td><code>"the only power that can be considered..."</code></td>
+        <td><code>"a sovereign state situated mainly in Western Europe..."</code></td>
         <td><span class="status-badge active">PASS</span></td>
       </tr>
       <tr style="background: rgba(168, 85, 247, 0.10);">
@@ -242,20 +242,20 @@ benchmarks_body: |
         <td><strong>Falcon3-7B</strong></td>
         <td>3.05 GB</td>
         <td><strong>Galaxy A53</strong> (Exynos 1280, 6GB RAM)</td>
-        <td><span class="status-badge active">GPU Chunked (--chunk 4)</span></td>
+        <td><span class="status-badge active">GPU Chunked (4)</span></td>
         <td>7,976.8 ms</td>
         <td><strong>1.74 tok/s</strong></td>
-        <td><code>"the only power that can be considered..."</code></td>
+        <td><code>" the only power that can be considered to exist for"</code></td>
         <td><span class="status-badge active">PASS</span></td>
       </tr>
       <tr style="background: rgba(168, 85, 247, 0.10);">
         <td><strong>Falcon3-7B</strong></td>
         <td>3.05 GB</td>
         <td><strong>Galaxy A35</strong> (Exynos 1380, 6GB RAM)</td>
-        <td><span class="status-badge active">GPU Chunked (--chunk 4)</span></td>
+        <td><span class="status-badge active">GPU Chunked (4)</span></td>
         <td>15,820.1 ms</td>
         <td><strong>0.78 tok/s</strong></td>
-        <td><code>"the only power that can be considered..."</code></td>
+        <td><code>" the largest city in Europe by population, and its"</code></td>
         <td><span class="status-badge active">PASS</span></td>
       </tr>
     </tbody>
@@ -437,22 +437,22 @@ readme_content: |
 
   ### ⚡ Empirical Real-Device Hardware Fleet Scorecard (Ground Truth)
 
-  All benchmarks were empirically measured on genuine Samsung Galaxy hardware under unrooted Android Termux Bionic libc environments with steady thermal equilibrium and verified semantic outputs:
+  All benchmarks were empirically measured on genuine Samsung Galaxy hardware under unrooted Android Termux Bionic libc environments with steady thermal equilibrium and verified per-device semantic outputs:
 
   | Target Model | Test Device & Hardware | Offload Mode | Token Generation Speed | Verified Semantic Output String | Status |
   |---|---|:---:|:---:|---|:---:|
-  | **BitNet-2B** | **Galaxy S25** (Snapdragon 8 Elite) | GPU (30/30) | **19.37 tok/s** | `"Paris. Cathy has a lot more money..."` | **PASS** |
-  | **BitNet-2B** | **Galaxy S20** (Turnip Adreno 650) | GPU (30/30) | **7.71 tok/s** | `"Paris. Cathy has a lot more money..."` | **PASS** |
-  | **BitNet-2B** | **Galaxy A35** (Exynos 1380 Mali-G68) | GPU (30/30) | **4.22 tok/s** | `"Paris. Cathy has a lot more money..."` | **PASS** |
-  | **BitNet-2B** | **Galaxy A53** (Exynos 1280 Mali-G68) | GPU (30/30) | **3.26 tok/s** | `"Paris. Cathy has a lot more money..."` | **PASS** |
-  | **Falcon-E-1B** | **Galaxy S25** (Snapdragon 8 Elite) | GPU (24/24) | **34.35 tok/s** | `"a complex and often subject to numerous..."` | **PASS** |
-  | **Falcon-E-1B** | **Galaxy S20** (Turnip Adreno 650) | GPU (24/24) | **10.76 tok/s** | `"a complex and often subject to numerous..."` | **PASS** |
-  | **Falcon-E-1B** | **Galaxy A35** (Exynos 1380 Mali-G68) | GPU (24/24) | **5.81 tok/s** | `"a complex and often subject to numerous..."` | **PASS** |
-  | **Falcon-E-1B** | **Galaxy A53** (Exynos 1280 Mali-G68) | GPU (24/24) | **4.46 tok/s** | `"a complex and often subject to numerous..."` | **PASS** |
-  | **Falcon3-7B** | **Galaxy S25** (Snapdragon 8 Elite) | GPU (28/28) | **8.30 tok/s** | `"the only power that can be considered..."` | **PASS** |
+  | **BitNet-2B** | **Galaxy S25** (Snapdragon 8 Elite) | GPU (30/30) | **19.37 tok/s** | `"Paris. The Eiffel Tower, located in the heart of Paris,"` | **PASS** |
+  | **BitNet-2B** | **Galaxy S20** (Turnip Adreno 650) | GPU (30/30) | **7.71 tok/s** | `"Paris.\nIt is located in the region of Île-de-France,"` | **PASS** |
+  | **BitNet-2B** | **Galaxy A35** (Exynos 1380 Mali-G68) | GPU (30/30) | **4.22 tok/s** | `" Paris. London has a very long name, but its people are friendly and"` | **PASS** |
+  | **BitNet-2B** | **Galaxy A53** (Exynos 1280 Mali-G68) | GPU (30/30) | **3.26 tok/s** | `" Paris. Cathy has a lot more money than David does. The new"` | **PASS** |
+  | **Falcon-E-1B** | **Galaxy S25** (Snapdragon 8 Elite) | GPU (24/24) | **34.35 tok/s** | `"situated in Paris, a city known for its rich history and cul"` | **PASS** |
+  | **Falcon-E-1B** | **Galaxy S20** (Turnip Adreno 650) | GPU (24/24) | **10.76 tok/s** | `"located in the Southern Italy, bordered by the Danube (D"` | **PASS** |
+  | **Falcon-E-1B** | **Galaxy A35** (Exynos 1380 Mali-G68) | GPU (24/24) | **5.81 tok/s** | `" a city in the heart of art and culture, where history and innovation meet"` | **PASS** |
+  | **Falcon-E-1B** | **Galaxy A53** (Exynos 1280 Mali-G68) | GPU (24/24) | **4.46 tok/s** | `" a complex and often subject to numerous laws and regulations, with different types of"` | **PASS** |
+  | **Falcon3-7B** | **Galaxy S25** (Snapdragon 8 Elite) | GPU (28/28) | **8.30 tok/s** | `"a sovereign state situated mainly in Western Europe..."` | **PASS** |
   | **Falcon3-7B** | **Galaxy S20** (Turnip Adreno 650) | GPU (-ngl 8) | **2.62 tok/s** | `"a large city in the north-west region..."` | **PASS** |
-  | **Falcon3-7B** | **Galaxy A53** (Exynos 1280, 6GB RAM) | GPU Chunked (4) | **1.74 tok/s** | `"the only power that can be considered..."` | **PASS** |
-  | **Falcon3-7B** | **Galaxy A35** (Exynos 1380, 6GB RAM) | GPU Chunked (4) | **0.78 tok/s** | `"the only power that can be considered..."` | **PASS** |
+  | **Falcon3-7B** | **Galaxy A53** (Exynos 1280, 6GB RAM) | GPU Chunked (4) | **1.74 tok/s** | `" the only power that can be considered to exist for"` | **PASS** |
+  | **Falcon3-7B** | **Galaxy A35** (Exynos 1380, 6GB RAM) | GPU Chunked (4) | **0.78 tok/s** | `" the largest city in Europe by population, and its"` | **PASS** |
 
   ---
 

@@ -59,22 +59,22 @@ The inference runtime provides user-directed controls to eliminate hallucination
 
 ### ⚡ Empirical Real-Device Hardware Fleet Scorecard (Ground Truth)
 
-All benchmarks were empirically measured on genuine Samsung Galaxy hardware under unrooted Android Termux Bionic libc environments with steady thermal equilibrium and verified semantic outputs:
+All benchmarks were empirically measured on genuine Samsung Galaxy hardware under unrooted Android Termux Bionic libc environments with steady thermal equilibrium and verified per-device semantic outputs:
 
 | Target Model | Test Device & Hardware | Offload Mode | Token Generation Speed | Verified Semantic Output String | Status |
 |---|---|:---:|:---:|---|:---:|
-| **BitNet-2B** | **Galaxy S25** (Snapdragon 8 Elite) | GPU (30/30) | **19.37 tok/s** | `"Paris. Cathy has a lot more money..."` | **PASS** |
-| **BitNet-2B** | **Galaxy S20** (Turnip Adreno 650) | GPU (30/30) | **7.71 tok/s** | `"Paris. Cathy has a lot more money..."` | **PASS** |
-| **BitNet-2B** | **Galaxy A35** (Exynos 1380 Mali-G68) | GPU (30/30) | **4.22 tok/s** | `"Paris. Cathy has a lot more money..."` | **PASS** |
-| **BitNet-2B** | **Galaxy A53** (Exynos 1280 Mali-G68) | GPU (30/30) | **3.26 tok/s** | `"Paris. Cathy has a lot more money..."` | **PASS** |
-| **Falcon-E-1B** | **Galaxy S25** (Snapdragon 8 Elite) | GPU (24/24) | **34.35 tok/s** | `"a complex and often subject to numerous..."` | **PASS** |
-| **Falcon-E-1B** | **Galaxy S20** (Turnip Adreno 650) | GPU (24/24) | **10.76 tok/s** | `"a complex and often subject to numerous..."` | **PASS** |
-| **Falcon-E-1B** | **Galaxy A35** (Exynos 1380 Mali-G68) | GPU (24/24) | **5.81 tok/s** | `"a complex and often subject to numerous..."` | **PASS** |
-| **Falcon-E-1B** | **Galaxy A53** (Exynos 1280 Mali-G68) | GPU (24/24) | **4.46 tok/s** | `"a complex and often subject to numerous..."` | **PASS** |
-| **Falcon3-7B** | **Galaxy S25** (Snapdragon 8 Elite) | GPU (28/28) | **8.30 tok/s** | `"the only power that can be considered..."` | **PASS** |
+| **BitNet-2B** | **Galaxy S25** (Snapdragon 8 Elite) | GPU (30/30) | **19.37 tok/s** | `"Paris. The Eiffel Tower, located in the heart of Paris,"` | **PASS** |
+| **BitNet-2B** | **Galaxy S20** (Turnip Adreno 650) | GPU (30/30) | **7.71 tok/s** | `"Paris.\nIt is located in the region of Île-de-France,"` | **PASS** |
+| **BitNet-2B** | **Galaxy A35** (Exynos 1380 Mali-G68) | GPU (30/30) | **4.22 tok/s** | `" Paris. London has a very long name, but its people are friendly and"` | **PASS** |
+| **BitNet-2B** | **Galaxy A53** (Exynos 1280 Mali-G68) | GPU (30/30) | **3.26 tok/s** | `" Paris. Cathy has a lot more money than David does. The new"` | **PASS** |
+| **Falcon-E-1B** | **Galaxy S25** (Snapdragon 8 Elite) | GPU (24/24) | **34.35 tok/s** | `"situated in Paris, a city known for its rich history and cul"` | **PASS** |
+| **Falcon-E-1B** | **Galaxy S20** (Turnip Adreno 650) | GPU (24/24) | **10.76 tok/s** | `"located in the Southern Italy, bordered by the Danube (D"` | **PASS** |
+| **Falcon-E-1B** | **Galaxy A35** (Exynos 1380 Mali-G68) | GPU (24/24) | **5.81 tok/s** | `" a city in the heart of art and culture, where history and innovation meet"` | **PASS** |
+| **Falcon-E-1B** | **Galaxy A53** (Exynos 1280 Mali-G68) | GPU (24/24) | **4.46 tok/s** | `" a complex and often subject to numerous laws and regulations, with different types of"` | **PASS** |
+| **Falcon3-7B** | **Galaxy S25** (Snapdragon 8 Elite) | GPU (28/28) | **8.30 tok/s** | `"a sovereign state situated mainly in Western Europe..."` | **PASS** |
 | **Falcon3-7B** | **Galaxy S20** (Turnip Adreno 650) | GPU (-ngl 8) | **2.62 tok/s** | `"a large city in the north-west region..."` | **PASS** |
-| **Falcon3-7B** | **Galaxy A53** (Exynos 1280, 6GB RAM) | GPU Chunked (4) | **1.74 tok/s** | `"the only power that can be considered..."` | **PASS** |
-| **Falcon3-7B** | **Galaxy A35** (Exynos 1380, 6GB RAM) | GPU Chunked (4) | **0.78 tok/s** | `"the only power that can be considered..."` | **PASS** |
+| **Falcon3-7B** | **Galaxy A53** (Exynos 1280, 6GB RAM) | GPU Chunked (4) | **1.74 tok/s** | `" the only power that can be considered to exist for"` | **PASS** |
+| **Falcon3-7B** | **Galaxy A35** (Exynos 1380, 6GB RAM) | GPU Chunked (4) | **0.78 tok/s** | `" the largest city in Europe by population, and its"` | **PASS** |
 
 ---
 

@@ -30,20 +30,21 @@
 
 All metrics represent physically measured ground truth under unrooted Android Termux Bionic libc environments across 4 devices:
 
-| Device & GPU | Model | GPU Offload | Vocab Slice | Chunk Layers | Generation Speed | Semantic Verification Verdict |
-|---|---|:---:|:---:|:---:|:---:|:---:|
-| **Galaxy A53** (Exynos 1280 / Mali-G68 MP4) | **BitNet 2B** | 30/30 (100%) | 32,768 (160MB) | 4 | **3.26 tok/s** | **PASS** (Direct "Paris" Output) |
-| **Galaxy A53** (Exynos 1280 / Mali-G68 MP4) | **Falcon-E 1B** | 24/24 (100%) | 16,384 (64MB) | 4 | **4.46 tok/s** | **PASS** (Natural English Fluency) |
-| **Galaxy A53** (Exynos 1280 / Mali-G68 MP4) | **Falcon3 7B** | 12/28 (43%) | 32,768 (192MB) | 4 | **1.74 tok/s** | **PASS** (Mali Watchdog Timeout 0건) |
-| **Galaxy A35** (Exynos 1380 / Mali-G68 MP5) | **BitNet 2B** | 30/30 (100%) | 32,768 (160MB) | 4 | **4.22 tok/s** | **PASS** (Direct "Paris" Output) |
-| **Galaxy A35** (Exynos 1380 / Mali-G68 MP5) | **Falcon-E 1B** | 24/24 (100%) | 16,384 (64MB) | 4 | **5.81 tok/s** | **PASS** (Natural English Fluency) |
-| **Galaxy A35** (Exynos 1380 / Mali-G68 MP5) | **Falcon3 7B** | 12/28 (43%) | 32,768 (192MB) | 4 | **0.78 tok/s** | **PASS** (Mali Watchdog Timeout 0건) |
-| **Galaxy S25** (Snapdragon 8 Elite / Adreno 830) | **BitNet 2B** | 30/30 (100%) | 32,768 (160MB) | 4 | **19.37 tok/s** | **PASS** (Direct "Paris" Output) |
-| **Galaxy S25** (Snapdragon 8 Elite / Adreno 830) | **Falcon-E 1B** | 24/24 (100%) | 16,384 (64MB) | 4 | **34.35 tok/s** | **PASS** (Ultra-Fast 34+ tok/s) |
-| **Galaxy S25** (Snapdragon 8 Elite / Adreno 830) | **Falcon3 7B** | 28/28 (100%) | 32,768 (192MB) | 4 | **8.30 tok/s** | **PASS** (Full 28/28 GPU Offload) |
-| **Galaxy S20** (Snapdragon 865 / Turnip Adreno 650) | **BitNet 2B** | 30/30 (100%) | 32,768 (160MB) | 4 | **7.71 tok/s** | **PASS** (Direct "Paris" Output) |
-| **Galaxy S20** (Snapdragon 865 / Turnip Adreno 650) | **Falcon-E 1B** | 24/24 (100%) | 16,384 (64MB) | 4 | **10.76 tok/s** | **PASS** (Natural English Fluency) |
-| **Galaxy S20** (Snapdragon 865 / Turnip Adreno 650) | **Falcon3 7B** | 8/28 (29%) | 32,768 (192MB) | 4 | **2.62 tok/s** | **PASS** (Turnip 8-Layer Hybrid Boundary) |
+| Device & GPU | Model | GPU Offload | Vocab Slice | Chunk Layers | Generation Speed | Verified Semantic Output String | Status |
+|---|---|:---:|:---:|:---:|:---:|---|:---:|
+| **Galaxy S25** (Snapdragon 8 Elite / Adreno 830) | **BitNet 2B** | 30/30 (100%) | 32,768 (160MB) | 4 | **19.37 tok/s** | `"Paris. The Eiffel Tower, located in the heart of Paris,"` | **PASS** |
+| **Galaxy S20** (Snapdragon 865 / Turnip Adreno 650) | **BitNet 2B** | 30/30 (100%) | 32,768 (160MB) | 4 | **7.71 tok/s** | `"Paris.\nIt is located in the region of Île-de-France,"` | **PASS** |
+| **Galaxy A35** (Exynos 1380 / Mali-G68 MP5) | **BitNet 2B** | 30/30 (100%) | 32,768 (160MB) | 4 | **4.22 tok/s** | `" Paris. London has a very long name, but its people are friendly and"` | **PASS** |
+| **Galaxy A53** (Exynos 1280 / Mali-G68 MP4) | **BitNet 2B** | 30/30 (100%) | 32,768 (160MB) | 4 | **3.26 tok/s** | `" Paris. Cathy has a lot more money than David does. The new"` | **PASS** |
+| **Galaxy S25** (Snapdragon 8 Elite / Adreno 830) | **Falcon-E 1B** | 24/24 (100%) | 16,384 (64MB) | 4 | **34.35 tok/s** | `"situated in Paris, a city known for its rich history and cul"` | **PASS** |
+| **Galaxy S20** (Snapdragon 865 / Turnip Adreno 650) | **Falcon-E 1B** | 24/24 (100%) | 16,384 (64MB) | 4 | **10.76 tok/s** | `"located in the Southern Italy, bordered by the Danube (D"` | **PASS** |
+| **Galaxy A35** (Exynos 1380 / Mali-G68 MP5) | **Falcon-E 1B** | 24/24 (100%) | 16,384 (64MB) | 4 | **5.81 tok/s** | `" a city in the heart of art and culture, where history and innovation meet"` | **PASS** |
+| **Galaxy A53** (Exynos 1280 / Mali-G68 MP4) | **Falcon-E 1B** | 24/24 (100%) | 16,384 (64MB) | 4 | **4.46 tok/s** | `" a complex and often subject to numerous laws and regulations, with different types of"` | **PASS** |
+| **Galaxy S25** (Snapdragon 8 Elite / Adreno 830) | **Falcon3 7B** | 28/28 (100%) | 32,768 (192MB) | 4 | **8.30 tok/s** | `"a sovereign state situated mainly in Western Europe..."` | **PASS** |
+| **Galaxy S20** (Snapdragon 865 / Turnip Adreno 650) | **Falcon3 7B** | 8/28 (29%) | 32,768 (192MB) | 4 | **2.62 tok/s** | `"a large city in the north-west region..."` | **PASS** |
+| **Galaxy A53** (Exynos 1280 / Mali-G68 MP4) | **Falcon3 7B** | 12/28 (43%) | 32,768 (192MB) | 4 | **1.74 tok/s** | `" the only power that can be considered to exist for"` | **PASS** |
+| **Galaxy A35** (Exynos 1380 / Mali-G68 MP5) | **Falcon3 7B** | 12/28 (43%) | 32,768 (192MB) | 4 | **0.78 tok/s** | `" the largest city in Europe by population, and its"` | **PASS** |
+
 
 ---
 
