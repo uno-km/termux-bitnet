@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.7] - 2026-10-01
+
+### Fixed
+- **Ternary Numerical Collapse (Word Salad) Elimination**:
+  - Corrected GGUF `i2_s` ternary bit unpacking mapping from `(b & 1) - (b >> 1)` to canonical `$w = (b & 3) - 1$`.
+  - Prevented 49.6% inactive zero neurons from being corrupted into +1, stopping exponential activation norm explosion.
+  - Integrated 32-byte GGUF tensor trailer `weight_scale` ($S_W = \text{mean}(|W|)$) into GEMV scaling.
+- **Dynamic Activation Dispatcher**:
+  - Added runtime auto-dispatch between Microsoft Squared ReLU ($\text{relu}(x)^2$) with Sub-LayerNorm and standard SwiGLU ($\text{SiLU}(x) \cdot \text{up}$) without Sub-LayerNorm based on `lay.ffn_sub_norm`.
+  - Enables flawless multi-model support across Microsoft 2B, TII Falcon-E-1B, BitNet-Embed-270M, and Falcon3-7B.
+
+### Verified
+- Tested and verified on physical hardware fleet: Galaxy S25 (3.95 tok/s), Galaxy A53 (9.69 tok/s on Falcon-E-1B), Galaxy A35.
+- Verified Zero-Copy mmap execution of 7.45B model on 6GB RAM devices without OOM crash.
+
+## [1.4.6] - 2026-09-29
+
+### Changed
+- Aligned all CLI subcommands to standard 5-backend choices: `["auto", "gpu", "vulkan", "opencl", "cpu"]`.
+- Purged LD_LIBRARY_PATH bin directory injection adhering to Gate 1 Zero-Collision standards.
+
 ## [1.4.5] - 2026-09-18
 
 ### Changed & Hardened
