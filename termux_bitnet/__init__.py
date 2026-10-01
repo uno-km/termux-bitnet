@@ -14,7 +14,7 @@ from termux_bitnet.hardware import (
 from termux_bitnet.downloader import download_model, list_models, resolve_model_path, AVAILABLE_MODELS
 from termux_bitnet.exceptions import AmevaTermuxError, PlatformNotSupportedError, BitNetEngineNotFound
 
-__version__ = "1.4.7"
+__version__ = "2.0.0"
 __author__ = "uno-km"
 
 __all__ = [
