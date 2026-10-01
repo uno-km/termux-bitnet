@@ -90,6 +90,15 @@ struct BitNetLayerWeights {
     const void*  w_down = nullptr;        // blk.N.ffn_down.weight
     uint32_t w_down_type = 30;
 
+    // True BitNet I2_S weight scale factors (tail 32-byte header)
+    float scale_wq = 1.0f;
+    float scale_wk = 1.0f;
+    float scale_wv = 1.0f;
+    float scale_wo = 1.0f;
+    float scale_w_gate = 1.0f;
+    float scale_w_up = 1.0f;
+    float scale_w_down = 1.0f;
+
     // GPU residency byte offsets in unified Vulkan buffer
     uint32_t gpu_offset_attn_norm = 0;
     uint32_t gpu_offset_wq = 0;
@@ -156,7 +165,7 @@ struct bitnet_context {
     
     std::vector<float> scratch_buf;
     std::mt19937 rng;
-    std::mutex ctx_mutex;
+    std::recursive_mutex ctx_mutex;
     bool is_initialized = false;
 
     // GPU Acceleration Engine

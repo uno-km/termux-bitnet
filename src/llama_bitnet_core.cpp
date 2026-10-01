@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <chrono>
 #include <thread>
+#include <tuple>
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
@@ -275,12 +276,17 @@ bitnet_context_t bitnet_init(const bitnet_params_t* params) {
             ctx->config.n_ffn = (uint32_t)v;
         } else if (key.find("rms_epsilon") != std::string::npos) {
             float v = 1e-5f;
-            if (val_type == 5) { read_val(model_file, v); }
+            if (val_type == 6) { read_val(model_file, v); }
+            else if (val_type == 12) { double d; read_val(model_file, d); v = (float)d; }
+            else if (val_type == 5) { int32_t t; read_val(model_file, t); v = (float)t; }
             else skip_gguf_value(model_file, val_type);
             ctx->config.norm_eps = v;
         } else if (key.find("rope") != std::string::npos && key.find("freq_base") != std::string::npos) {
-            float v = 10000.0f;
-            if (val_type == 5) { read_val(model_file, v); }
+            float v = 500000.0f;
+            if (val_type == 6) { read_val(model_file, v); }
+            else if (val_type == 12) { double d; read_val(model_file, d); v = (float)d; }
+            else if (val_type == 5) { int32_t t; read_val(model_file, t); v = (float)t; }
+            else if (val_type == 4) { uint32_t t; read_val(model_file, t); v = (float)t; }
             else skip_gguf_value(model_file, val_type);
             ctx->config.rope_theta = v;
         } else {
@@ -400,11 +406,20 @@ bitnet_context_t bitnet_init(const bitnet_params_t* params) {
         auto& lay = ctx->layers[l];
         std::string prefix = "blk." + std::to_string(l) + ".";
 
-        auto bind_t = [&](const std::string& name, const void*& ptr, uint32_t& type) {
+        auto bind_t = [&](const std::string& name, const void*& ptr, uint32_t& type, float* scale = nullptr) {
             auto it = ctx->tensor_map.find(prefix + name);
             if (it != ctx->tensor_map.end()) {
-                ptr = ctx->tensors[it->second].data;
-                type = ctx->tensors[it->second].type;
+                const auto& t = ctx->tensors[it->second];
+                ptr = t.data;
+                type = t.type;
+                if (scale && (t.type == 36 || t.type == 30) && t.data) {
+                    uint64_t n_elem = 1;
+                    for (auto d : t.ne) n_elem *= d;
+                    uint64_t packed_bytes = n_elem / 4;
+                    *scale = *(const float*)(t.data + packed_bytes);
+                } else if (scale) {
+                    *scale = 1.0f;
+                }
             }
         };
 
@@ -412,28 +427,28 @@ bitnet_context_t bitnet_init(const bitnet_params_t* params) {
         bind_t("attn_norm.weight", tmp_norm, lay.attn_norm_type);
         lay.attn_norm = (const float*)tmp_norm;
 
-        bind_t("attn_q.weight", lay.wq, lay.wq_type);
-        bind_t("attn_k.weight", lay.wk, lay.wk_type);
-        bind_t("attn_v.weight", lay.wv, lay.wv_type);
+        bind_t("attn_q.weight", lay.wq, lay.wq_type, &lay.scale_wq);
+        bind_t("attn_k.weight", lay.wk, lay.wk_type, &lay.scale_wk);
+        bind_t("attn_v.weight", lay.wv, lay.wv_type, &lay.scale_wv);
 
         tmp_norm = nullptr;
         bind_t("attn_sub_norm.weight", tmp_norm, lay.attn_sub_norm_type);
         lay.attn_sub_norm = (const float*)tmp_norm;
 
-        bind_t("attn_output.weight", lay.wo, lay.wo_type);
+        bind_t("attn_output.weight", lay.wo, lay.wo_type, &lay.scale_wo);
 
         tmp_norm = nullptr;
         bind_t("ffn_norm.weight", tmp_norm, lay.ffn_norm_type);
         lay.ffn_norm = (const float*)tmp_norm;
 
-        bind_t("ffn_gate.weight", lay.w_gate, lay.w_gate_type);
-        bind_t("ffn_up.weight", lay.w_up, lay.w_up_type);
+        bind_t("ffn_gate.weight", lay.w_gate, lay.w_gate_type, &lay.scale_w_gate);
+        bind_t("ffn_up.weight", lay.w_up, lay.w_up_type, &lay.scale_w_up);
 
         tmp_norm = nullptr;
         bind_t("ffn_sub_norm.weight", tmp_norm, lay.ffn_sub_norm_type);
         lay.ffn_sub_norm = (const float*)tmp_norm;
 
-        bind_t("ffn_down.weight", lay.w_down, lay.w_down_type);
+        bind_t("ffn_down.weight", lay.w_down, lay.w_down_type, &lay.scale_w_down);
 
         // Strict Fail-Fast: verify all linear projection weight types are supported 1.58-bit (i2_s) or F32/F16
         auto check_type = [&](const char* name, uint32_t type) {
@@ -688,7 +703,7 @@ bitnet_context_t bitnet_init(const bitnet_params_t* params) {
 
 int32_t bitnet_set_params(bitnet_context_t ctx, const bitnet_params_t* params) {
     if (!ctx || !params) return -1;
-    std::lock_guard<std::mutex> lock(ctx->ctx_mutex);
+    std::lock_guard<std::recursive_mutex> lock(ctx->ctx_mutex);
 
     if (params->n_threads > 0) ctx->params.n_threads = params->n_threads;
     if (params->n_predict > 0) ctx->params.n_predict = params->n_predict;
@@ -724,7 +739,7 @@ int32_t bitnet_set_params(bitnet_context_t ctx, const bitnet_params_t* params) {
 
 void bitnet_free(bitnet_context_t ctx) {
     if (ctx) {
-        std::lock_guard<std::mutex> lock(ctx->ctx_mutex);
+        std::lock_guard<std::recursive_mutex> lock(ctx->ctx_mutex);
         ctx->is_initialized = false;
 
 #if defined(GGML_USE_VULKAN)
@@ -773,7 +788,7 @@ void bitnet_free(bitnet_context_t ctx) {
 // ============================================================================
 int32_t bitnet_tokenize(bitnet_context_t ctx, const char* text, int32_t* tokens, int32_t max_tokens) {
     if (!ctx || !ctx->is_initialized || !text || !tokens || max_tokens <= 0) return -1;
-    std::lock_guard<std::mutex> lock(ctx->ctx_mutex);
+    std::lock_guard<std::recursive_mutex> lock(ctx->ctx_mutex);
 
     int32_t count = 0;
     if (ctx->vocab.bos_id >= 0 && count < max_tokens) {
@@ -829,7 +844,7 @@ int32_t bitnet_tokenize(bitnet_context_t ctx, const char* text, int32_t* tokens,
 
 int32_t bitnet_token_to_str(bitnet_context_t ctx, int32_t token, char* buf, int32_t buf_len) {
     if (!ctx || !ctx->is_initialized || !buf || buf_len <= 0) return 0;
-    std::lock_guard<std::mutex> lock(ctx->ctx_mutex);
+    std::lock_guard<std::recursive_mutex> lock(ctx->ctx_mutex);
 
     if (token < 0 || token >= (int32_t)ctx->vocab.id_to_token.size()) {
         buf[0] = '\0';
@@ -933,15 +948,16 @@ static float quantize_activation_int8(int8_t* out, const float* x, uint32_t dim)
 
 static void bitnet_gemv(float* out, const void* w, uint32_t w_type, 
                         const int8_t* x_q8, const float* x_f32, float dequant, 
-                        uint32_t in_dim, uint32_t out_dim, int32_t n_threads = 4) {
+                        uint32_t in_dim, uint32_t out_dim, float weight_scale = 1.0f, int32_t n_threads = 4) {
     if (!w) {
         std::memset(out, 0, out_dim * sizeof(float));
         return;
     }
     if (w_type == 36 || w_type == 30) { // GGML_TYPE_I2_S (36 in BitNet GGUF standard, 30 legacy)
         ggml_vec_dot_i2_i8_s((int)in_dim, out, 1, w, (size_t)in_dim, x_q8, (size_t)in_dim, (int)out_dim, 0);
+        float total_scale = dequant * weight_scale;
         for (uint32_t r = 0; r < out_dim; ++r) {
-            out[r] *= dequant;
+            out[r] *= total_scale;
         }
     } else if (w_type == 0) { // F32 Fallback
         const float* fw = (const float*)w;
@@ -1009,16 +1025,17 @@ static void bitnet_gemv(float* out, const void* w, uint32_t w_type,
 }
 
 static void apply_rope(float* vec, size_t pos, uint32_t n_heads, uint32_t head_dim, float theta_base) {
+    uint32_t half = head_dim / 2;
     for (uint32_t h = 0; h < n_heads; ++h) {
         float* head_ptr = vec + h * head_dim;
-        for (uint32_t i = 0; i < head_dim; i += 2) {
-            float theta = (float)pos / std::pow(theta_base, (float)i / (float)head_dim);
+        for (uint32_t i = 0; i < half; ++i) {
+            float theta = (float)pos / std::pow(theta_base, (float)(2 * i) / (float)head_dim);
             float cos_t = std::cos(theta);
             float sin_t = std::sin(theta);
             float v0 = head_ptr[i];
-            float v1 = head_ptr[i + 1];
-            head_ptr[i]     = v0 * cos_t - v1 * sin_t;
-            head_ptr[i + 1] = v0 * sin_t + v1 * cos_t;
+            float v1 = head_ptr[i + half];
+            head_ptr[i]        = v0 * cos_t - v1 * sin_t;
+            head_ptr[i + half] = v1 * cos_t + v0 * sin_t;
         }
     }
 }
@@ -1101,14 +1118,14 @@ static void forward_swiglu(float* out, const float* ffn_norm, const BitNetLayerW
     std::vector<int8_t> x_q8(cfg.n_embd);
     float dequant = quantize_activation_int8(x_q8.data(), ffn_norm, cfg.n_embd);
 
-    bitnet_gemv(gate, lay.w_gate, lay.w_gate_type, x_q8.data(), ffn_norm, dequant, cfg.n_embd, cfg.n_ffn);
-    bitnet_gemv(up, lay.w_up, lay.w_up_type, x_q8.data(), ffn_norm, dequant, cfg.n_embd, cfg.n_ffn);
+    bitnet_gemv(gate, lay.w_gate, lay.w_gate_type, x_q8.data(), ffn_norm, dequant, cfg.n_embd, cfg.n_ffn, lay.scale_w_gate);
+    bitnet_gemv(up, lay.w_up, lay.w_up_type, x_q8.data(), ffn_norm, dequant, cfg.n_embd, cfg.n_ffn, lay.scale_w_up);
 
-    // SiLU(gate) * up
+    // BitNet b1.58-2B: Squared ReLU (relu2) activation: relu(gate)^2 * up
     for (uint32_t i = 0; i < cfg.n_ffn; ++i) {
         float g = gate[i];
-        float silu = g / (1.0f + std::exp(-g));
-        gate[i] = silu * up[i];
+        float r = g > 0.0f ? g : 0.0f;
+        gate[i] = (r * r) * up[i];
     }
 
     // BitNet Sub-LayerNorm for FFN intermediate
@@ -1119,7 +1136,7 @@ static void forward_swiglu(float* out, const float* ffn_norm, const BitNetLayerW
     // Down projection: gate_intermediate * w_down
     std::vector<int8_t> inter_q8(cfg.n_ffn);
     float inter_dequant = quantize_activation_int8(inter_q8.data(), gate, cfg.n_ffn);
-    bitnet_gemv(out, lay.w_down, lay.w_down_type, inter_q8.data(), gate, inter_dequant, cfg.n_ffn, cfg.n_embd);
+    bitnet_gemv(out, lay.w_down, lay.w_down_type, inter_q8.data(), gate, inter_dequant, cfg.n_ffn, cfg.n_embd, lay.scale_w_down);
 }
 
 // ============================================================================
@@ -1127,7 +1144,7 @@ static void forward_swiglu(float* out, const float* ffn_norm, const BitNetLayerW
 // ============================================================================
 int32_t bitnet_eval(bitnet_context_t ctx, const int32_t* tokens, int32_t n_tokens) {
     if (!ctx || !ctx->is_initialized || !tokens || n_tokens <= 0) return -1;
-    std::lock_guard<std::mutex> lock(ctx->ctx_mutex);
+    std::lock_guard<std::recursive_mutex> lock(ctx->ctx_mutex);
 
     const auto& cfg = ctx->config;
     std::vector<float> x(cfg.n_embd);
@@ -1193,9 +1210,27 @@ int32_t bitnet_eval(bitnet_context_t ctx, const int32_t* tokens, int32_t n_token
             rms_norm(x_norm.data(), x.data(), lay.attn_norm, lay.attn_norm_type, cfg.n_embd, cfg.norm_eps);
 
             float dequant = quantize_activation_int8(q8_buf.data(), x_norm.data(), cfg.n_embd);
-            bitnet_gemv(q.data(), lay.wq, lay.wq_type, q8_buf.data(), x_norm.data(), dequant, cfg.n_embd, q_dim);
-            bitnet_gemv(k.data(), lay.wk, lay.wk_type, q8_buf.data(), x_norm.data(), dequant, cfg.n_embd, kv_dim);
-            bitnet_gemv(v.data(), lay.wv, lay.wv_type, q8_buf.data(), x_norm.data(), dequant, cfg.n_embd, kv_dim);
+            bitnet_gemv(q.data(), lay.wq, lay.wq_type, q8_buf.data(), x_norm.data(), dequant, cfg.n_embd, q_dim, lay.scale_wq);
+            bitnet_gemv(k.data(), lay.wk, lay.wk_type, q8_buf.data(), x_norm.data(), dequant, cfg.n_embd, kv_dim, lay.scale_wk);
+            bitnet_gemv(v.data(), lay.wv, lay.wv_type, q8_buf.data(), x_norm.data(), dequant, cfg.n_embd, kv_dim, lay.scale_wv);
+
+            if (l == 0 && pos == 0 && ctx->params.verbose) {
+                auto get_stats = [](const float* arr, size_t n) {
+                    float norm = 0.0f, min_v = 1e9f, max_v = -1e9f;
+                    for (size_t i = 0; i < n; ++i) {
+                        norm += arr[i] * arr[i];
+                        if (arr[i] < min_v) min_v = arr[i];
+                        if (arr[i] > max_v) max_v = arr[i];
+                    }
+                    return std::make_tuple(std::sqrt(norm), min_v, max_v);
+                };
+                auto [qn, qmin, qmax] = get_stats(q.data(), q_dim);
+                auto [kn, kmin, kmax] = get_stats(k.data(), kv_dim);
+                auto [vn, vmin, vmax] = get_stats(v.data(), kv_dim);
+                std::cout << "[DEBUG L0 POS0] Q: norm=" << qn << ", min=" << qmin << ", max=" << qmax << std::endl;
+                std::cout << "[DEBUG L0 POS0] K: norm=" << kn << ", min=" << kmin << ", max=" << kmax << std::endl;
+                std::cout << "[DEBUG L0 POS0] V: norm=" << vn << ", min=" << vmin << ", max=" << vmax << std::endl;
+            }
 
             // 3.2 Rotary Position Embedding (RoPE)
             apply_rope(q.data(), pos, cfg.n_heads, cfg.head_dim, cfg.rope_theta);
@@ -1212,20 +1247,44 @@ int32_t bitnet_eval(bitnet_context_t ctx, const int32_t* tokens, int32_t n_token
 
             // 3.5 Output Projection
             float attn_dequant = quantize_activation_int8(q8_buf.data(), attn_out.data(), cfg.n_embd);
-            bitnet_gemv(wo_out.data(), lay.wo, lay.wo_type, q8_buf.data(), attn_out.data(), attn_dequant, cfg.n_embd, cfg.n_embd);
+            bitnet_gemv(wo_out.data(), lay.wo, lay.wo_type, q8_buf.data(), attn_out.data(), attn_dequant, cfg.n_embd, cfg.n_embd, lay.scale_wo);
+            
+            float wo_n = 0.0f;
+            for (uint32_t i = 0; i < cfg.n_embd; ++i) wo_n += wo_out[i] * wo_out[i];
+            
             for (uint32_t i = 0; i < cfg.n_embd; ++i) x[i] += wo_out[i];
 
             // 3.6 FFN RMSNorm & SwiGLU FFN (with Sub-LayerNorm)
             rms_norm(x_norm.data(), x.data(), lay.ffn_norm, lay.ffn_norm_type, cfg.n_embd, cfg.norm_eps);
             forward_swiglu(ffn_out.data(), x_norm.data(), lay, cfg, nullptr, false, ffn_gate.data(), ffn_up.data());
 
+            float ffn_n = 0.0f;
+            for (uint32_t i = 0; i < cfg.n_embd; ++i) ffn_n += ffn_out[i] * ffn_out[i];
+
             // 3.7 Residual Connection
             for (uint32_t i = 0; i < cfg.n_embd; ++i) x[i] += ffn_out[i];
+
+            if (ctx->params.verbose && l == 0) {
+                std::cout << "[DEBUG L0 DETAIL] pos=" << pos << " wo_norm=" << std::sqrt(wo_n) << " ffn_norm=" << std::sqrt(ffn_n) << std::endl;
+            }
+
+            if (ctx->params.verbose && (l == 0 || l == 1 || l == 14 || l == 29)) {
+                float xn = 0.0f;
+                for (uint32_t i = 0; i < cfg.n_embd; ++i) xn += x[i] * x[i];
+                std::cout << "[DEBUG LAYER " << l << " POS " << pos << "] x_norm=" << std::sqrt(xn) << ", x[0..3]=[" << x[0] << ", " << x[1] << ", " << x[2] << ", " << x[3] << "]" << std::endl;
+            }
         }
 
         // 3. Final RMSNorm & LM Head Projection (Evaluated on last sequence token)
         if (t == n_tokens - 1) {
             rms_norm(x_norm.data(), x.data(), ctx->output_norm, ctx->output_norm_type, cfg.n_embd, cfg.norm_eps);
+            {
+                float xn = 0.0f;
+                for (uint32_t i = 0; i < cfg.n_embd; ++i) xn += x_norm[i] * x_norm[i];
+                if (ctx->params.verbose) {
+                    std::cout << "[DEBUG FINAL NORM] final_x_norm=" << std::sqrt(xn) << ", first 4 vals=[" << x_norm[0] << ", " << x_norm[1] << ", " << x_norm[2] << ", " << x_norm[3] << "]" << std::endl;
+                }
+            }
 #if defined(GGML_USE_VULKAN)
             if (ctx->vk_engine && static_cast<ameva::core::VulkanBitNetEngine*>(ctx->vk_engine)->HasLMHead()) {
                 static_cast<ameva::core::VulkanBitNetEngine*>(ctx->vk_engine)->DispatchLMHead(
@@ -1236,6 +1295,23 @@ int32_t bitnet_eval(bitnet_context_t ctx, const int32_t* tokens, int32_t n_token
                 float final_dequant = quantize_activation_int8(q8_buf.data(), x_norm.data(), cfg.n_embd);
                 bitnet_gemv(ctx->logits.data(), ctx->output_weight, ctx->output_weight_type, 
                             q8_buf.data(), x_norm.data(), final_dequant, cfg.n_embd, cfg.n_vocab, ctx->params.n_threads);
+            }
+            if (ctx->params.verbose) {
+                float max_l = -1e9f, min_l = 1e9f;
+                int max_idx = 0;
+                for (size_t i = 0; i < cfg.n_vocab; ++i) {
+                    if (ctx->logits[i] > max_l) { max_l = ctx->logits[i]; max_idx = (int)i; }
+                    if (ctx->logits[i] < min_l) min_l = ctx->logits[i];
+                }
+                std::vector<std::pair<float, int>> top_k;
+                for (size_t i = 0; i < cfg.n_vocab; ++i) top_k.emplace_back(ctx->logits[i], (int)i);
+                std::partial_sort(top_k.begin(), top_k.begin() + 5, top_k.end(), std::greater<std::pair<float, int>>());
+                std::cout << "[DEBUG EVAL] Last token logits range: [" << min_l << ", " << max_l << "]" << std::endl;
+                for (int ki = 0; ki < 5; ++ki) {
+                    char tok_str[64] = {0};
+                    bitnet_token_to_str(ctx, top_k[ki].second, tok_str, sizeof(tok_str));
+                    std::cout << "  #" << ki+1 << ": ID=" << top_k[ki].second << " ('" << tok_str << "', logit=" << top_k[ki].first << ")" << std::endl;
+                }
             }
         }
 
@@ -1250,11 +1326,21 @@ int32_t bitnet_eval(bitnet_context_t ctx, const int32_t* tokens, int32_t n_token
 
 int32_t bitnet_sample(bitnet_context_t ctx) {
     if (!ctx || !ctx->is_initialized || ctx->logits.empty()) return -1;
-    std::lock_guard<std::mutex> lock(ctx->ctx_mutex);
+    std::lock_guard<std::recursive_mutex> lock(ctx->ctx_mutex);
 
     std::vector<float> working_logits = ctx->logits;
 
-    // 1. Repetition Penalty Matrix calculation across active context window
+    // 1. Frequency and Presence Penalty across generated context
+    if (ctx->params.frequency_penalty > 0.0f || ctx->params.presence_penalty > 0.0f) {
+        for (const auto& [tok, freq] : ctx->token_frequencies) {
+            if (tok >= 0 && tok < (int32_t)working_logits.size()) {
+                working_logits[tok] -= (float)freq * ctx->params.frequency_penalty;
+                working_logits[tok] -= ctx->params.presence_penalty;
+            }
+        }
+    }
+
+    // 2. Repetition Penalty Matrix calculation across active context window
     int32_t last_n = std::min((int32_t)ctx->context_tokens.size(), ctx->params.repeat_last_n > 0 ? ctx->params.repeat_last_n : 64);
     if (last_n > 0 && ctx->params.repeat_penalty > 1.0f) {
         for (int32_t i = (int32_t)ctx->context_tokens.size() - last_n; i < (int32_t)ctx->context_tokens.size(); ++i) {
@@ -1269,20 +1355,36 @@ int32_t bitnet_sample(bitnet_context_t ctx) {
         }
     }
 
-    // 2. Extract and sort Candidate Probs over the entire vocabulary space
+    // 3. Extract and sort Candidate Probs over the entire vocabulary space
     std::vector<std::pair<float, int32_t>> candidates;
     candidates.reserve(ctx->config.n_vocab);
-    for (size_t i = 3; i < (size_t)ctx->config.n_vocab; ++i) {
+    for (size_t i = 0; i < (size_t)ctx->config.n_vocab; ++i) {
+        if ((int32_t)i == ctx->vocab.bos_id || (int32_t)i == ctx->vocab.pad_id) continue;
         candidates.emplace_back(working_logits[i], (int32_t)i);
     }
     if (candidates.empty()) return ctx->vocab.eos_id;
     std::sort(candidates.rbegin(), candidates.rend());
 
-    // 3. Apply Top-K cutoff
+    if (ctx->params.verbose && ctx->context_tokens.size() <= (size_t)ctx->metrics.prompt_tokens + 3) {
+        std::cout << "[DEBUG SAMPLE] Candidates Top-5: ";
+        for (size_t ci = 0; ci < std::min((size_t)5, candidates.size()); ++ci) {
+            char tok_buf[64] = {0};
+            bitnet_token_to_str(ctx, candidates[ci].second, tok_buf, sizeof(tok_buf));
+            std::cout << "#" << ci+1 << " ID=" << candidates[ci].second << " ('" << tok_buf << "', logit=" << candidates[ci].first << ") ";
+        }
+        std::cout << std::endl;
+    }
+
+    // Greedy decoding shortcut if temperature <= 0.0
+    if (ctx->params.temperature <= 0.0f) {
+        return candidates[0].second;
+    }
+
+    // 4. Apply Top-K cutoff
     size_t k = ctx->params.top_k > 0 ? (size_t)ctx->params.top_k : 40;
     size_t k_limit = std::min(candidates.size(), k);
 
-    // 4. Softmax with Temperature & Top-P
+    // 5. Softmax with Temperature
     float temp = std::max(0.01f, ctx->params.temperature);
     float max_logit = candidates[0].first;
     float sum_exp = 0.0f;
@@ -1292,13 +1394,31 @@ int32_t bitnet_sample(bitnet_context_t ctx) {
         exp_probs[i] = std::exp((candidates[i].first - max_logit) / temp);
         sum_exp += exp_probs[i];
     }
+    for (size_t i = 0; i < k_limit; ++i) {
+        exp_probs[i] /= (sum_exp > 1e-9f ? sum_exp : 1.0f);
+    }
 
-    std::uniform_real_distribution<float> dist(0.0f, sum_exp);
+    // 6. Nucleus Top-P filtering
+    float top_p = (ctx->params.top_p > 0.0f && ctx->params.top_p <= 1.0f) ? ctx->params.top_p : 0.95f;
+    float cum_p = 0.0f;
+    size_t p_limit = k_limit;
+    for (size_t i = 0; i < k_limit; ++i) {
+        cum_p += exp_probs[i];
+        if (cum_p >= top_p) {
+            p_limit = i + 1;
+            break;
+        }
+    }
+
+    float p_sum = 0.0f;
+    for (size_t i = 0; i < p_limit; ++i) p_sum += exp_probs[i];
+
+    std::uniform_real_distribution<float> dist(0.0f, p_sum);
     float r = dist(ctx->rng);
     float cur = 0.0f;
     int32_t selected_token = candidates[0].second;
 
-    for (size_t i = 0; i < k_limit; ++i) {
+    for (size_t i = 0; i < p_limit; ++i) {
         cur += exp_probs[i];
         if (cur >= r) {
             selected_token = candidates[i].second;
@@ -1325,9 +1445,9 @@ int32_t bitnet_generate_stream(bitnet_context_t ctx, const char* prompt, int32_t
 
     std::string full_prompt;
     if (!ctx->system_prompt.empty()) {
-        full_prompt = ctx->system_prompt + "\n" + prompt;
+        full_prompt = "System: " + ctx->system_prompt + "\n\nUser: " + prompt + "\n\nAssistant: ";
     } else {
-        full_prompt = prompt;
+        full_prompt = std::string(prompt);
     }
 
     std::vector<int32_t> prompt_tokens(ctx->params.n_ctx > 0 ? ctx->params.n_ctx : 2048);
@@ -1349,7 +1469,7 @@ int32_t bitnet_generate_stream(bitnet_context_t ctx, const char* prompt, int32_t
     char token_buf[512];
     for (int32_t i = 0; i < max_new_tokens; ++i) {
         int32_t next_tok = bitnet_sample(ctx);
-        if (next_tok == ctx->vocab.eos_id) break;
+        if (next_tok == ctx->vocab.eos_id || next_tok == 128009 || next_tok == 128001) break;
 
         bitnet_token_to_str(ctx, next_tok, token_buf, sizeof(token_buf));
         if (std::strlen(token_buf) == 0) break;
@@ -1421,7 +1541,7 @@ void bitnet_get_hardware_info(char* buf, int32_t buf_len) {
 
 void bitnet_get_perf_stats(bitnet_context_t ctx, double* prompt_eval_ms, double* eval_ms, double* tokens_per_sec) {
     if (!ctx) return;
-    std::lock_guard<std::mutex> lock(ctx->ctx_mutex);
+    std::lock_guard<std::recursive_mutex> lock(ctx->ctx_mutex);
     if (prompt_eval_ms) *prompt_eval_ms = ctx->metrics.prompt_eval_ms;
     if (eval_ms) *eval_ms = ctx->metrics.eval_time_ms;
     if (tokens_per_sec) *tokens_per_sec = ctx->metrics.tokens_per_sec;

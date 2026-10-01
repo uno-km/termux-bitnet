@@ -143,12 +143,16 @@ void ggml_vec_dot_i2_i8_s_1x1(int n, float * s, size_t bs, const void * vx, size
                 int k = j * 16;
                 uint8x16_t xb = vld1q_u8(px + k);
 
-                // MSB -> LSB 2-bit Unpacking (Identical to AVX2 logic)
-                int8x16_t ones = vdupq_n_s8(1);
-                int8x16_t v0 = vsubq_s8(vreinterpretq_s8_u8(vandq_u8(vshrq_n_u8(xb, 6), mask)), ones);
-                int8x16_t v1 = vsubq_s8(vreinterpretq_s8_u8(vandq_u8(vshrq_n_u8(xb, 4), mask)), ones);
-                int8x16_t v2 = vsubq_s8(vreinterpretq_s8_u8(vandq_u8(vshrq_n_u8(xb, 2), mask)), ones);
-                int8x16_t v3 = vsubq_s8(vreinterpretq_s8_u8(vandq_u8(xb, mask)), ones);
+                // MSB -> LSB 2-bit Unpacking (Official BitNet I2_S: 00->-1, 01->0, 10->+1, 11->unused)
+                uint8x16_t b0 = vandq_u8(vshrq_n_u8(xb, 6), mask);
+                uint8x16_t b1 = vandq_u8(vshrq_n_u8(xb, 4), mask);
+                uint8x16_t b2 = vandq_u8(vshrq_n_u8(xb, 2), mask);
+                uint8x16_t b3 = vandq_u8(xb, mask);
+
+                int8x16_t v0 = vsubq_s8(vreinterpretq_s8_u8(b0), vdupq_n_s8(1));
+                int8x16_t v1 = vsubq_s8(vreinterpretq_s8_u8(b1), vdupq_n_s8(1));
+                int8x16_t v2 = vsubq_s8(vreinterpretq_s8_u8(b2), vdupq_n_s8(1));
+                int8x16_t v3 = vsubq_s8(vreinterpretq_s8_u8(b3), vdupq_n_s8(1));
 
                 // 32-stride Interleaved Load
                 int8x16_t y0 = vld1q_s8(py + k +  0*32);
@@ -198,10 +202,15 @@ void ggml_vec_dot_i2_i8_s_1x1(int n, float * s, size_t bs, const void * vx, size
             for (int k = 0; k < 32; k++) {
                 uint8_t byte_val = px[k];
 
-                int8_t v0 = (int8_t)((byte_val >> 6) & 0x03) - 1;
-                int8_t v1 = (int8_t)((byte_val >> 4) & 0x03) - 1;
-                int8_t v2 = (int8_t)((byte_val >> 2) & 0x03) - 1;
-                int8_t v3 = (int8_t)(byte_val & 0x03) - 1;
+                uint8_t b0 = (byte_val >> 6) & 0x03;
+                uint8_t b1 = (byte_val >> 4) & 0x03;
+                uint8_t b2 = (byte_val >> 2) & 0x03;
+                uint8_t b3 = byte_val & 0x03;
+
+                int8_t v0 = (int8_t)b0 - 1;
+                int8_t v1 = (int8_t)b1 - 1;
+                int8_t v2 = (int8_t)b2 - 1;
+                int8_t v3 = (int8_t)b3 - 1;
 
                 int8_t y0 = py[k + 0 * 32];
                 int8_t y1 = py[k + 1 * 32];
@@ -231,6 +240,7 @@ void ggml_vec_dot_i2_i8_s_1xN(int n, float * s, size_t bs, const void * vx, size
     const int QK = 128;
     const int nb = n / QK;
     const uint8x16_t mask = vdupq_n_u8(0x03);
+    const uint8x16_t ones_mask = vdupq_n_u8(0x01);
 
     for (int col = 0; col < nrc; col += PARALLEL_SIZE) {
         int cur_p = (col + PARALLEL_SIZE <= nrc) ? PARALLEL_SIZE : (nrc - col);
@@ -246,10 +256,15 @@ void ggml_vec_dot_i2_i8_s_1xN(int n, float * s, size_t bs, const void * vx, size
                 int k = j * 16;
                 uint8x16_t xb = vld1q_u8(px + k);
 
-                int8x16_t v0 = vreinterpretq_s8_u8(vandq_u8(vshrq_n_u8(xb, 6), mask));
-                int8x16_t v1 = vreinterpretq_s8_u8(vandq_u8(vshrq_n_u8(xb, 4), mask));
-                int8x16_t v2 = vreinterpretq_s8_u8(vandq_u8(vshrq_n_u8(xb, 2), mask));
-                int8x16_t v3 = vreinterpretq_s8_u8(vandq_u8(xb, mask));
+                uint8x16_t b0 = vandq_u8(vshrq_n_u8(xb, 6), mask);
+                uint8x16_t b1 = vandq_u8(vshrq_n_u8(xb, 4), mask);
+                uint8x16_t b2 = vandq_u8(vshrq_n_u8(xb, 2), mask);
+                uint8x16_t b3 = vandq_u8(xb, mask);
+
+                int8x16_t v0 = vsubq_s8(vreinterpretq_s8_u8(b0), vdupq_n_s8(1));
+                int8x16_t v1 = vsubq_s8(vreinterpretq_s8_u8(b1), vdupq_n_s8(1));
+                int8x16_t v2 = vsubq_s8(vreinterpretq_s8_u8(b2), vdupq_n_s8(1));
+                int8x16_t v3 = vsubq_s8(vreinterpretq_s8_u8(b3), vdupq_n_s8(1));
 
                 for (int iy = 0; iy < cur_p; iy++) {
                     const int8_t * py = y + (col + iy) * by + b * QK;
