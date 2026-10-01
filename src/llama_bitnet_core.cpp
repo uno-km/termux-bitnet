@@ -135,6 +135,9 @@ bitnet_params_t bitnet_default_params(void) {
     p.flash_attn = false;
     p.verbose = false;
     p.eos_token_id = -1;
+    p.vocab_slice = 0;
+    p.chunk_layers = 0;
+    p.stream_layers = 0;
     return p;
 }
 
@@ -650,11 +653,19 @@ bitnet_context_t bitnet_init(const bitnet_params_t* params) {
 
             // LM Head GPU residency (FP16 Vocabulary Output Projection)
             if (ctx->output_weight && ctx->output_weight_type == 1) {
-                size_t lm_head_bytes = (size_t)ctx->config.n_vocab * ctx->config.n_embd * sizeof(uint16_t);
-                engine->AllocateLMHeadBuffer(lm_head_bytes, ctx->config.n_vocab, ctx->config.n_embd);
+                uint32_t active_vocab = ctx->config.n_vocab;
+                if (ctx->params.vocab_slice > 0 && (uint32_t)ctx->params.vocab_slice < ctx->config.n_vocab) {
+                    active_vocab = (uint32_t)ctx->params.vocab_slice;
+                }
+                size_t lm_head_bytes = (size_t)active_vocab * ctx->config.n_embd * sizeof(uint16_t);
+                engine->AllocateLMHeadBuffer(lm_head_bytes, active_vocab, ctx->config.n_embd);
                 engine->UploadLMHeadWeights(ctx->output_weight, lm_head_bytes);
-                std::cout << "[termux-bitnet] LM Head (FP16 " << ctx->config.n_vocab << "x" << ctx->config.n_embd
-                          << ", " << (lm_head_bytes / (1024 * 1024)) << " MB) permanently resident in GPU VRAM." << std::endl;
+                std::cout << "[termux-bitnet] LM Head (FP16 " << active_vocab << "x" << ctx->config.n_embd
+                          << ", " << (lm_head_bytes / (1024 * 1024)) << " MB) permanently resident in GPU VRAM.";
+                if (active_vocab < ctx->config.n_vocab) {
+                    std::cout << " (Vocab Sliced from " << ctx->config.n_vocab << ")";
+                }
+                std::cout << std::endl;
             }
 
             ctx->vk_engine = engine;
@@ -723,6 +734,9 @@ int32_t bitnet_set_params(bitnet_context_t ctx, const bitnet_params_t* params) {
         ctx->rng.seed(params->seed);
     }
     ctx->params.eos_token_id = params->eos_token_id;
+    ctx->params.vocab_slice = params->vocab_slice;
+    ctx->params.chunk_layers = params->chunk_layers;
+    ctx->params.stream_layers = params->stream_layers;
     if (params->stop_tokens && std::strlen(params->stop_tokens) > 0) {
         ctx->params.stop_tokens = params->stop_tokens;
         ctx->stop_words.clear();
@@ -1215,7 +1229,8 @@ int32_t bitnet_eval(bitnet_context_t ctx, const int32_t* tokens, int32_t n_token
                                            gpu_offsets.data(), (uint32_t)offloaded_layers,
                                            q_dim, kv_dim, cfg.n_embd, cfg.n_ffn,
                                            cfg.head_dim, cfg.n_heads, cfg.n_kv_heads,
-                                           cfg.rope_theta, cfg.norm_eps, 1.0f);
+                                           cfg.rope_theta, cfg.norm_eps, 1.0f,
+                                           (uint32_t)ctx->params.chunk_layers);
 #endif
         }
 
@@ -1303,9 +1318,13 @@ int32_t bitnet_eval(bitnet_context_t ctx, const int32_t* tokens, int32_t n_token
                 }
             }
 #if defined(GGML_USE_VULKAN)
+            uint32_t active_vocab = (ctx->params.vocab_slice > 0 && (uint32_t)ctx->params.vocab_slice < cfg.n_vocab) ? (uint32_t)ctx->params.vocab_slice : cfg.n_vocab;
             if (ctx->vk_engine && static_cast<ameva::core::VulkanBitNetEngine*>(ctx->vk_engine)->HasLMHead()) {
                 static_cast<ameva::core::VulkanBitNetEngine*>(ctx->vk_engine)->DispatchLMHead(
-                    x_norm.data(), ctx->logits.data(), cfg.n_vocab, cfg.n_embd);
+                    x_norm.data(), ctx->logits.data(), active_vocab, cfg.n_embd);
+                for (size_t i = active_vocab; i < cfg.n_vocab; ++i) {
+                    ctx->logits[i] = -1e9f;
+                }
             } else
 #endif
             {
@@ -1315,9 +1334,8 @@ int32_t bitnet_eval(bitnet_context_t ctx, const int32_t* tokens, int32_t n_token
             }
             if (ctx->params.verbose) {
                 float max_l = -1e9f, min_l = 1e9f;
-                int max_idx = 0;
                 for (size_t i = 0; i < cfg.n_vocab; ++i) {
-                    if (ctx->logits[i] > max_l) { max_l = ctx->logits[i]; max_idx = (int)i; }
+                    if (ctx->logits[i] > max_l) max_l = ctx->logits[i];
                     if (ctx->logits[i] < min_l) min_l = ctx->logits[i];
                 }
                 std::vector<std::pair<float, int>> top_k;

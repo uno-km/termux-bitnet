@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ameva-runtime-bitnet"
+version = "1.0.0"
+description = "Native Vulkan Compute GPU Acceleration for BitNet 1.58-bit Ternary Models (Mali & Adreno)"
+readme = "README.md"
+authors = [{ name = "Eunho Kim", email = "contact@uno-km.com" }]
+license = { text = "Apache-2.0" }
+requires-python = ">=3.8"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Android",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence"
+]
+dependencies = []
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q"
+testpaths = ["tests"]

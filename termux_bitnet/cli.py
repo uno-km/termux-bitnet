@@ -179,6 +179,9 @@ def cmd_run(args):
         chat_template=chat_template,
         prompt_prefix=getattr(args, "prompt_prefix", None),
         prompt_suffix=getattr(args, "prompt_suffix", None),
+        vocab_slice=getattr(args, "vocab_slice", 0) or 0,
+        chunk_layers=getattr(args, "chunk_layers", 0) or 0,
+        stream_layers=getattr(args, "stream_layers", 0) or 0,
     )
 
     print("=========================================================")
@@ -387,6 +390,9 @@ def main():
     p_run.add_argument("--prompt-prefix", default="", help="Custom prompt prefix string")
     p_run.add_argument("--prompt-suffix", default="", help="Custom prompt suffix string")
     p_run.add_argument("--eos-token-id", type=int, default=None, help="Custom EOS token ID override")
+    p_run.add_argument("--vocab-slice", type=int, default=0, help="Slice LM Head to top N vocabulary rows (0 = disabled/full)")
+    p_run.add_argument("--chunk-layers", type=int, default=0, help="Submit GPU layers in chunks of N to prevent watchdog timeout (0 = disabled)")
+    p_run.add_argument("--stream-layers", type=int, default=0, help="Streaming layer ping-pong buffer size (0 = disabled)")
     p_run.add_argument("--verbose", action="store_true", help="Enable verbose logs")
     p_run.set_defaults(func=cmd_run)
 
@@ -417,6 +423,9 @@ def main():
     p_chat.add_argument("--prompt-prefix", default="", help="Custom prompt prefix string")
     p_chat.add_argument("--prompt-suffix", default="", help="Custom prompt suffix string")
     p_chat.add_argument("--eos-token-id", type=int, default=None, help="Custom EOS token ID override")
+    p_chat.add_argument("--vocab-slice", type=int, default=0, help="Slice LM Head to top N vocabulary rows (0 = disabled/full)")
+    p_chat.add_argument("--chunk-layers", type=int, default=0, help="Submit GPU layers in chunks of N to prevent watchdog timeout (0 = disabled)")
+    p_chat.add_argument("--stream-layers", type=int, default=0, help="Streaming layer ping-pong buffer size (0 = disabled)")
     p_chat.add_argument("--verbose", action="store_true", help="Enable verbose logs")
     p_chat.set_defaults(func=cmd_chat)
 

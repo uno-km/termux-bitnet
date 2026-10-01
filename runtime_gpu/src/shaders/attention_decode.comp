@@ -1,0 +1,136 @@
+#version 450
+
+// ============================================================================
+// AMEVA Runtime - Decode Multi-Head Self-Attention Dynamic Compute Shader
+// Hardware Target: ARM Mali & Qualcomm Adreno
+// Binding 2: TargetBuffer (reads Q in-place, writes attn_out in-place at offset 0)
+// Binding 3: KVCacheBuffer (reads K and V caches)
+// Workgroup: local_size_x = 256 (handles head_dim up to 256)
+// Grid: (n_heads, 1, 1)
+// ============================================================================
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, binding = 2) buffer TargetBuffer {
+    float data[];
+};
+
+layout(std430, binding = 3) readonly buffer KVCacheBuffer {
+    float kv_data[];
+};
+
+layout(push_constant) uniform PushConstants {
+    uint in_dim;             // n_ctx (e.g. 512 or 2048)
+    uint out_dim;            // n_heads
+    float dequant_scale;     // inv_sqrt = 1.0f / sqrt(head_dim)
+    uint weight_offset_bytes;// current_pos
+    uint output_offset_words;// layer_idx
+    uint head_dim;           // dynamic head_dim (64, 80, 128, 256)
+    uint n_kv_heads;         // dynamic n_kv_heads (2, 4, 5, 8, 16, 32)
+    uint gqa_ratio;          // dynamic gqa_ratio = out_dim / n_kv_heads
+} params;
+
+shared float shared_dot[256];
+shared float shared_scores[2048];
+shared float shared_max_score;
+shared float shared_inv_sum;
+
+void main() {
+    uint h = gl_WorkGroupID.x;
+    uint tid = gl_LocalInvocationID.x;
+    if (h >= params.out_dim) return;
+
+    uint head_dim = params.head_dim;
+    uint n_kv_heads = params.n_kv_heads;
+    uint gqa_ratio = params.gqa_ratio;
+    uint kv_h = h / gqa_ratio;
+    uint pos = params.weight_offset_bytes;
+    uint layer_idx = params.output_offset_words;
+    uint n_ctx = params.in_dim;
+
+    uint pos_stride = n_kv_heads * head_dim;
+    uint layer_stride = n_ctx * pos_stride;
+    uint layer_base = layer_idx * (2u * layer_stride);
+
+    // 1. Load Q value for this thread into register (read before writing data[])
+    float q_val = (tid < head_dim) ? data[h * head_dim + tid] : 0.0f;
+
+    // 2. Calculate Attention Scores for past tokens p = 0..pos
+    if (tid == 0u) shared_max_score = -1e9;
+    memoryBarrierShared();
+    barrier();
+
+    for (uint p = 0u; p <= pos && p < n_ctx; ++p) {
+        if (tid < head_dim) {
+            uint k_offset = layer_base + p * pos_stride + kv_h * head_dim + tid;
+            float k_val = kv_data[k_offset];
+            shared_dot[tid] = q_val * k_val;
+        } else {
+            shared_dot[tid] = 0.0f;
+        }
+        memoryBarrierShared();
+        barrier();
+
+        // Tree reduction (256 -> 1)
+        if (tid < 128u) shared_dot[tid] += shared_dot[tid + 128u];
+        memoryBarrierShared();
+        barrier();
+        if (tid < 64u)  shared_dot[tid] += shared_dot[tid + 64u];
+        memoryBarrierShared();
+        barrier();
+        if (tid < 32u)  shared_dot[tid] += shared_dot[tid + 32u];
+        memoryBarrierShared();
+        barrier();
+        if (tid < 16u)  shared_dot[tid] += shared_dot[tid + 16u];
+        memoryBarrierShared();
+        barrier();
+        if (tid < 8u)   shared_dot[tid] += shared_dot[tid + 8u];
+        memoryBarrierShared();
+        barrier();
+        if (tid < 4u)   shared_dot[tid] += shared_dot[tid + 4u];
+        memoryBarrierShared();
+        barrier();
+        if (tid < 2u)   shared_dot[tid] += shared_dot[tid + 2u];
+        memoryBarrierShared();
+        barrier();
+
+        if (tid == 0u) {
+            float dot = shared_dot[0] + shared_dot[1];
+            float score = dot * params.dequant_scale;
+            shared_scores[p] = score;
+            if (score > shared_max_score) shared_max_score = score;
+        }
+        memoryBarrierShared();
+        barrier();
+    }
+
+    // 3. Softmax over past sequence tokens [0 ... pos]
+    float max_s = shared_max_score;
+    if (tid == 0u) {
+        float sum_exp = 0.0;
+        for (uint p = 0u; p <= pos && p < n_ctx; ++p) {
+            float exp_val = exp(shared_scores[p] - max_s);
+            shared_scores[p] = exp_val;
+            sum_exp += exp_val;
+        }
+        shared_inv_sum = 1.0 / (sum_exp + 1e-9);
+    }
+    memoryBarrierShared();
+    barrier();
+
+    // 4. Weighted Accumulation with V
+    if (tid < head_dim) {
+        float inv_sum = shared_inv_sum;
+        float acc = 0.0;
+        uint v_base = layer_base + layer_stride;
+        for (uint p = 0u; p <= pos && p < n_ctx; ++p) {
+            float weight = shared_scores[p] * inv_sum;
+            uint v_offset = v_base + p * pos_stride + kv_h * head_dim + tid;
+            float v_val = kv_data[v_offset];
+            acc += weight * v_val;
+        }
+
+        // 5. Write in-place to data[h * head_dim + tid] (overwriting Q)
+        data[h * head_dim + tid] = acc;
+    }
+}

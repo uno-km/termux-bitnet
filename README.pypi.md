@@ -17,20 +17,24 @@ pip install termux-bitnet
 ```python
 from termux_bitnet import BitNetEngine, BitNetConfig
 
-# 1. Initialize engine with multi-model support (BitNet 2B, Falcon-E 1B, Falcon3 7B)
+# 1. Initialize engine with model wrapping and GPU acceleration options
 config = BitNetConfig(
     model_path="~/.cache/termux-bitnet/models/falcon-e-1b-instruct-i2_s.gguf",
-    device="auto",        # "auto", "cpu", or "gpu" (Vulkan via ameva-runtime)
+    device="gpu",           # "auto", "cpu", or "gpu" (Vulkan via ameva-runtime)
+    n_gpu_layers=24,        # Offload 24 layers to GPU
+    chat_template="falcon", # Auto-wrapping: ChatML, Falcon, or Raw
+    chunk_layers=4,         # Prevent Mali GPU watchdog timeout
+    vocab_slice=32768,      # Save 576MB VRAM on LM Head
     n_threads=4,
     temperature=0.7,
     top_p=0.95
 )
 
-# 2. Stream tokens in real time (9.69 tok/s on Galaxy A53)
+# 2. Stream tokens in real time (up to 34.35 tok/s on S25, 4.46 tok/s on A53)
 with BitNetEngine(config) as engine:
-    print("[Prompt]: Explain quantum entanglement in one sentence.")
+    print("[Prompt]: What is the capital of France?")
     print("[Response]: ", end="", flush=True)
-    for token in engine.generate_stream("Explain quantum entanglement in one sentence:"):
+    for token in engine.generate_stream("What is the capital of France?"):
         print(token, end="", flush=True)
     print()
     metrics = engine.get_last_metrics()
@@ -39,7 +43,7 @@ with BitNetEngine(config) as engine:
 ```
 
 ## Description
-Executes 1.58-bit ternary quantized weights {-1, 0, +1} directly via hand-vectorized ARM64 NEON assembly kernels and native Vulkan compute shaders powered by AMEVA-Runtime. Features a dynamic zero-overhead activation dispatcher supporting Squared ReLU (Microsoft 2B) and SwiGLU (Falcon-E-1B / Falcon3-7B) alongside Zero-Copy mmap streaming for 7.45B model execution on 6GB RAM smartphones.
+Executes 1.58-bit ternary quantized weights {-1, 0, +1} directly via hand-vectorized ARM64 NEON assembly kernels and native Vulkan compute shaders powered by AMEVA-Runtime. Features hallucination-prevention prompt wrapping, a dynamic zero-overhead activation dispatcher supporting Squared ReLU (Microsoft 2B) and SwiGLU (Falcon-E-1B / Falcon3-7B), GPU watchdog fence chunking, and Zero-Copy mmap streaming for 7.45B model execution on 6GB RAM smartphones.
 
 ## Documentation
 - [Official Documentation & API Reference](https://uno-km.vercel.app/lib/bitnet/)

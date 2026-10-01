@@ -18,10 +18,14 @@ npm install termux-bitnet
 const { createEngine } = require('termux-bitnet');
 
 async function main() {
-  // 1. Initialize engine with dynamic activation support
+  // 1. Initialize engine with model-specific wrapping & GPU chunking
   const engine = createEngine({
     modelPath: '~/.cache/termux-bitnet/models/falcon-e-1b-instruct-i2_s.gguf',
-    device: 'auto',      // 'auto', 'cpu', or 'gpu'
+    device: 'gpu',
+    gpuLayers: 24,
+    chatTemplate: 'falcon',
+    chunkLayers: 4,
+    vocabSlice: 32768,
     threads: 4,
     temperature: 0.7,
     topP: 0.95
@@ -41,7 +45,7 @@ main();
 ```
 
 ## Description
-Executes 1.58-bit ternary quantized weights {-1, 0, +1} directly via hand-vectorized ARM64 NEON assembly kernels and native Vulkan compute shaders powered by AMEVA-Runtime. Features a dynamic zero-overhead activation dispatcher supporting Squared ReLU (Microsoft 2B) and SwiGLU (Falcon-E-1B / Falcon3-7B) alongside Zero-Copy mmap streaming for 7.45B model execution on 6GB RAM smartphones.
+Executes 1.58-bit ternary quantized weights {-1, 0, +1} directly via hand-vectorized ARM64 NEON assembly kernels and native Vulkan compute shaders powered by AMEVA-Runtime. Features hallucination-prevention prompt wrapping, a dynamic zero-overhead activation dispatcher supporting Squared ReLU (Microsoft 2B) and SwiGLU (Falcon-E-1B / Falcon3-7B), GPU watchdog fence chunking, and Zero-Copy mmap streaming for 7.45B model execution on 6GB RAM smartphones.
 
 ## Documentation
 - [Official Documentation & API Reference](https://uno-km.vercel.app/lib/bitnet/)

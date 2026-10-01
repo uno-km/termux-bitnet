@@ -39,6 +39,9 @@ static void print_usage(std::ostream& out) {
         << "  --prompt-prefix <str>      Custom prompt prefix string\n"
         << "  --prompt-suffix <str>      Custom prompt suffix string\n"
         << "  --eos-token-id <int>       Custom EOS token ID override\n"
+        << "  --vocab-slice <int>        Slice LM Head to top N vocabulary items (default: 0 = disabled)\n"
+        << "  --chunk-layers <int>       Submit GPU layers in chunks of N (prevents Mali watchdog timeouts)\n"
+        << "  --stream-layers <int>      Streaming layer ping-pong buffer size (default: 0)\n"
         << "  -r, --stop <tokens>        Comma-separated stop sequences\n"
         << "  -v, --verbose              Enable diagnostic logging\n"
         << "  -h, --help                 Show this help manual\n\n"
@@ -142,6 +145,12 @@ int main(int argc, char** argv) {
             prompt_suffix = argv[++i];
         } else if (arg == "--eos-token-id" && i + 1 < argc) {
             params.eos_token_id = std::atoi(argv[++i]);
+        } else if (arg == "--vocab-slice" && i + 1 < argc) {
+            params.vocab_slice = std::atoi(argv[++i]);
+        } else if (arg == "--chunk-layers" && i + 1 < argc) {
+            params.chunk_layers = std::atoi(argv[++i]);
+        } else if (arg == "--stream-layers" && i + 1 < argc) {
+            params.stream_layers = std::atoi(argv[++i]);
         } else if (arg == "-v" || arg == "--verbose") {
             params.verbose = true;
         } else {

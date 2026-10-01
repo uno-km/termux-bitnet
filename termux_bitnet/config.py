@@ -33,6 +33,9 @@ class BitNetConfig:
     chat_template: Optional[str] = None
     prompt_prefix: Optional[str] = None
     prompt_suffix: Optional[str] = None
+    vocab_slice: int = 0
+    chunk_layers: int = 0
+    stream_layers: int = 0
 
     def __post_init__(self):
         """Auto-discover cached model if model_path is not explicitly provided."""

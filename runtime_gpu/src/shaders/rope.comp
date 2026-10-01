@@ -1,0 +1,53 @@
+#version 450
+
+// ============================================================================
+// AMEVA Runtime - Dynamic In-Place RoPE Compute Shader
+// Hardware Target: ARM Mali & Qualcomm Adreno
+// Math (Split-Half RoPE matching LLaMA / BitNet / CPU apply_rope):
+//   half = head_dim / 2
+//   theta = pos / (theta_base ^ (2*p / head_dim))
+//   v0' = v0 * cos(theta) - v1 * sin(theta)
+//   v1' = v1 * cos(theta) + v0 * sin(theta)  (= v0 * sin(theta) + v1 * cos(theta))
+// Binding 2: output_buffer_ in-place
+// Workgroup: local_size_x = 128 (supports head_dim up to 256)
+// Grid: (n_heads, 1, 1)
+// ============================================================================
+
+layout(local_size_x = 128, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, binding = 2) buffer TargetBuffer {
+    float data[];
+};
+
+layout(push_constant) uniform PushConstants {
+    uint in_dim;             // unused
+    uint out_dim;            // n_heads
+    float dequant_scale;     // theta_base (e.g. 10000.0)
+    uint weight_offset_bytes;// pos (token position)
+    uint output_offset_words;// offset in floats into TargetBuffer
+    uint head_dim;           // dynamic head_dim (64, 80, 128, etc.)
+    uint n_kv_heads;         // unused in rope
+    uint gqa_ratio;          // unused in rope
+} params;
+
+void main() {
+    uint h = gl_WorkGroupID.x;
+    uint p = gl_LocalInvocationID.x;
+    uint half_dim = params.head_dim / 2u;
+    if (h >= params.out_dim || p >= half_dim) return;
+
+    float pos = float(params.weight_offset_bytes);
+    float theta_base = params.dequant_scale;
+    float theta = pos / pow(theta_base, float(2u * p) / float(params.head_dim));
+    float cos_t = cos(theta);
+    float sin_t = sin(theta);
+
+    uint idx0 = params.output_offset_words + h * params.head_dim + p;
+    uint idx1 = idx0 + half_dim;
+
+    float v0 = data[idx0];
+    float v1 = data[idx1];
+
+    data[idx0] = v0 * cos_t - v1 * sin_t;
+    data[idx1] = v1 * cos_t + v0 * sin_t;
+}

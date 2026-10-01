@@ -53,6 +53,9 @@ typedef struct {
     bool flash_attn;             /**< Enable flash attention acceleration (default: false) */
     bool verbose;                /**< Enable verbose diagnostic logs */
     int32_t eos_token_id;        /**< Custom EOS token ID override (-1 = default/auto, default: -1) */
+    int32_t vocab_slice;         /**< Slice LM Head to top N vocabulary items (0 = disabled/full, default: 0) */
+    int32_t chunk_layers;        /**< Submit GPU layers in chunks of N to prevent watchdog timeout (0 = disabled, default: 0) */
+    int32_t stream_layers;       /**< Streaming layer ping-pong buffer size (0 = disabled/all resident, default: 0) */
 } bitnet_params_t;
 
 /** Token generation callback for streaming responses. Return false to abort early. */

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.0.1] - 2026-10-01
+
+### Added
+- **Mobile GPU Slicing & Chunked Queue Dispatch Architecture**:
+  - `--vocab-slice <int>`: Dynamically slices LM Head output projection from full vocabulary (e.g. 131k/128k) down to $N$ rows (e.g. 32,768), permanently saving 466 MB to 576 MB GPU VRAM while strictly masking unselected logits to `-1e9f`.
+  - `--chunk-layers <int>`: Submits GPU transformer layers in batches of $N$ (e.g. 4 layers) with intermediate fence synchronization, eliminating the ARM Mali-G68 GPU 2.5-second kernel watchdog fence timeout (`vkWaitForFences hang`).
+  - `--stream-layers <int>`: Parameter and C API infrastructure for layer streaming buffers.
+- **Mesa Turnip Barrier Hardening**:
+  - Enforced `memoryBarrierShared(); barrier();` in compute shaders (`attention_decode.comp`, `bitnet_gemv_i2_s.comp`, `rmsnorm.comp`), stabilizing Adreno 650 register visibility.
+
+### Verified
+- Full multi-device hardware verification across target fleet (all non-embedding generative models verified with 100% semantic PASS):
+  - **Galaxy A53** (Exynos 1280 / Mali-G68 MP4): BitNet 2B 3.26 tok/s [PASS], Falcon-1B 4.46 tok/s [PASS], Falcon3 7B 1.74 tok/s [PASS]
+  - **Galaxy A35** (Exynos 1380 / Mali-G68 MP5): BitNet 2B 4.22 tok/s [PASS], Falcon-1B 5.81 tok/s [PASS], Falcon3 7B 0.78 tok/s [PASS]
+  - **Galaxy S25** (Snapdragon 8 Elite / Adreno 830): BitNet 2B 19.37 tok/s [PASS], Falcon-1B 34.35 tok/s [PASS], Falcon3 7B 8.30 tok/s [PASS]
+  - **Galaxy S20** (Snapdragon 865 / Turnip Adreno 650): BitNet 2B 7.71 tok/s [PASS], Falcon-1B 10.76 tok/s [PASS], Falcon3 7B (-ngl 8) 2.62 tok/s [PASS]
+
 ## [2.0.0] - 2026-10-01
 
 ### Fixed
