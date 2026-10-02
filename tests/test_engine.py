@@ -94,7 +94,8 @@ class TestTermuxBitNet(unittest.TestCase):
             "n_batch", "n_ubatch", "n_predict", "top_k", "repeat_last_n",
             "n_gpu_layers", "seed", "temperature", "top_p", "min_p",
             "typical_p", "repeat_penalty", "frequency_penalty", "presence_penalty",
-            "flash_attn", "verbose"
+            "flash_attn", "verbose", "eos_token_id", "vocab_slice", "chunk_layers",
+            "stream_layers"
         ]
         self.assertEqual(fields, expected_fields)
 

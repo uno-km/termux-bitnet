@@ -50,18 +50,59 @@ def get_candidate_library_urls() -> list[str]:
     return urls
 
 
-def install_prebuilt_library() -> bool:
+def is_valid_elf(path: Path) -> bool:
+    """Verifies that the target path is a valid ELF executable/library via magic bytes."""
+    try:
+        p = path.resolve() if path.is_symlink() else path
+        if not p.is_file():
+            return False
+        with open(p, "rb") as f:
+            return f.read(4) == b"\x7fELF"
+    except (OSError, PermissionError):
+        return False
+
+
+def inspect_engine_state(so_path: Path, current_pkg_version: Optional[str] = None) -> str:
+    """Dynamically triages existing binary state without hardcoding."""
+    if not so_path.exists() and not so_path.is_symlink():
+        return "NOT_INSTALLED"
+    if not is_valid_elf(so_path):
+        return "BROKEN"
+    if so_path.is_symlink():
+        target = str(so_path.resolve())
+        if ".local/share/ameva" in target:
+            return "AMEVA_MANAGED"
+    return "LEGACY_STANDALONE"
+
+
+def install_prebuilt_library(force: bool = False, dedicate: bool = False) -> bool:
     prefix = os.environ.get("PREFIX", "/data/data/com.termux/files/usr")
     lib_dir = Path(prefix) / "lib"
     lib_dir.mkdir(parents=True, exist_ok=True)
     target_so = lib_dir / "libtermux_bitnet.so"
+
+    ver = _resolve_package_version() or "latest"
+
+    # Dedicated triage mode
+    if dedicate:
+        state = inspect_engine_state(target_so, ver)
+        if state == "AMEVA_MANAGED":
+            print(f"  [termux-bitnet] [DEDICATE] AMEVA Runtime managed engine detected. Preserving co-existence (<0.002s).")
+            return True
+        elif state == "LEGACY_STANDALONE":
+            print(f"  [termux-bitnet] [DEDICATE] Legacy standalone engine detected. Upgrading to latest...")
+            force = True
+
+    # "있어? 넘어가" - Skip if verified ELF shared library exists (<0.002s)
+    if not force and is_valid_elf(target_so):
+        print(f"  [termux-bitnet] [OK] Verified native ARM64 engine already present: {target_so}. Skipping download (<0.002s).")
+        return True
 
     xdg_cache = Path(os.environ.get("XDG_CACHE_HOME") or (Path.home() / ".cache"))
     staging_dir = xdg_cache / "termux-bitnet" / ".staging"
     staging_dir.mkdir(parents=True, exist_ok=True)
     staging_so = staging_dir / "libtermux_bitnet.so"
 
-    ver = _resolve_package_version() or "latest"
     print("=========================================================")
     print(f"  termux-bitnet Pure-CPU Engine Provisioning (v{ver})")
     print("=========================================================")
@@ -100,7 +141,13 @@ def install_prebuilt_library() -> bool:
 
 
 def main():
-    success = install_prebuilt_library()
+    import argparse
+    parser = argparse.ArgumentParser(description="termux-bitnet native library provisioner")
+    parser.add_argument("--force", "-f", action="store_true", help="Force clean re-download and installation")
+    parser.add_argument("--dedicate", action="store_true", help="Smart inspection mode: preserve AMEVA runtime symlinks, auto-upgrade legacy binaries")
+    args = parser.parse_args()
+
+    success = install_prebuilt_library(force=args.force, dedicate=args.dedicate)
     sys.exit(0 if success else 1)
 
 
