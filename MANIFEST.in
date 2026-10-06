@@ -1,0 +1,6 @@
+include README.md
+include LICENSE
+recursive-include termux_bitnet *.py
+prune src
+prune runtime_gpu
+global-exclude *.cpp *.h *.comp *.spv *.c CMakeLists.txt

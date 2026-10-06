@@ -1,0 +1,124 @@
+# Changelog
+
+All notable changes to 	ermux-bitnet will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [2.0.1] - 2026-10-01
+
+### Added
+- **Mobile GPU Slicing & Chunked Queue Dispatch Architecture**:
+  - `--vocab-slice <int>`: Dynamically slices LM Head output projection from full vocabulary (e.g. 131k/128k) down to $N$ rows (e.g. 32,768), permanently saving 466 MB to 576 MB GPU VRAM while strictly masking unselected logits to `-1e9f`.
+  - `--chunk-layers <int>`: Submits GPU transformer layers in batches of $N$ (e.g. 4 layers) with intermediate fence synchronization, eliminating the ARM Mali-G68 GPU 2.5-second kernel watchdog fence timeout (`vkWaitForFences hang`).
+  - `--stream-layers <int>`: Parameter and C API infrastructure for layer streaming buffers.
+- **Mesa Turnip Barrier Hardening**:
+  - Enforced `memoryBarrierShared(); barrier();` in compute shaders (`attention_decode.comp`, `bitnet_gemv_i2_s.comp`, `rmsnorm.comp`), stabilizing Adreno 650 register visibility.
+
+### Verified
+- Full multi-device hardware verification across target fleet (all non-embedding generative models verified with 100% semantic PASS):
+  - **Galaxy A53** (Exynos 1280 / Mali-G68 MP4): BitNet 2B 3.26 tok/s [PASS], Falcon-1B 4.46 tok/s [PASS], Falcon3 7B 1.74 tok/s [PASS]
+  - **Galaxy A35** (Exynos 1380 / Mali-G68 MP5): BitNet 2B 4.22 tok/s [PASS], Falcon-1B 5.81 tok/s [PASS], Falcon3 7B 0.78 tok/s [PASS]
+  - **Galaxy S25** (Snapdragon 8 Elite / Adreno 830): BitNet 2B 19.37 tok/s [PASS], Falcon-1B 34.35 tok/s [PASS], Falcon3 7B 8.30 tok/s [PASS]
+  - **Galaxy S20** (Snapdragon 865 / Turnip Adreno 650): BitNet 2B 7.71 tok/s [PASS], Falcon-1B 10.76 tok/s [PASS], Falcon3 7B (-ngl 8) 2.62 tok/s [PASS]
+
+## [2.0.0] - 2026-10-01
+
+### Fixed
+- **Ternary Numerical Collapse (Word Salad) Elimination**:
+  - Corrected GGUF `i2_s` ternary bit unpacking mapping from `(b & 1) - (b >> 1)` to canonical `$w = (b & 3) - 1$`.
+  - Prevented 49.6% inactive zero neurons from being corrupted into +1, stopping exponential activation norm explosion.
+  - Integrated 32-byte GGUF tensor trailer `weight_scale` ($S_W = \text{mean}(|W|)$) into GEMV scaling.
+- **Dynamic Activation Dispatcher**:
+  - Added runtime auto-dispatch between Microsoft Squared ReLU ($\text{relu}(x)^2$) with Sub-LayerNorm and standard SwiGLU ($\text{SiLU}(x) \cdot \text{up}$) without Sub-LayerNorm based on `lay.ffn_sub_norm`.
+  - Enables flawless multi-model support across Microsoft 2B, TII Falcon-E-1B, BitNet-Embed-270M, and Falcon3-7B.
+
+### Verified
+- Tested and verified on physical hardware fleet: Galaxy S25 (3.95 tok/s), Galaxy A53 (9.69 tok/s on Falcon-E-1B), Galaxy A35.
+- Verified Zero-Copy mmap execution of 7.45B model on 6GB RAM devices without OOM crash.
+
+## [1.4.6] - 2026-09-29
+
+### Changed
+- Aligned all CLI subcommands to standard 5-backend choices: `["auto", "gpu", "vulkan", "opencl", "cpu"]`.
+- Purged LD_LIBRARY_PATH bin directory injection adhering to Gate 1 Zero-Collision standards.
+
+## [1.4.5] - 2026-09-18
+
+### Changed & Hardened
+- **Zero-Hardcoding Dynamic Latest-First Provisioning Architecture**:
+  - Completely purged hardcoded fallback version strings (`1.4.0`) from `install.sh` and `termux_bitnet/installer.py`.
+  - Implemented dynamic GitHub API release querying and dynamic package resolution (`_resolve_package_version`).
+  - Prioritized invariant `releases/latest/download/libtermux_bitnet.so` and `termux-bitnet-android-aarch64.tar.gz` endpoints.
+  - Upgraded PyPI installation command to use `--upgrade` flag.
+  - Synchronized versions across `package.json`, `pyproject.toml`, and `termux_bitnet/__init__.py` to `1.4.5`.
+
+## [1.4.0] - 2026-09-07
+
+### Added
+- **Native Vulkan Compute GPU Engine (`runtime_gpu/`)**:
+  - Pure native Vulkan compute runtime supporting ARM Mali (Bifrost/Valhall) and Qualcomm Adreno (6xx/7xx/8xx) on Android Termux.
+  - GLSL 450 SPIR-V kernels for 1.58-bit ternary GEMV (`bitnet_gemv_i2_s.comp`), in-place RoPE (`rope.comp`), decode multi-head attention (`attention_decode.comp`), SwiGLU SiLU (`swiglu_silu.comp`), RMSNorm (`rmsnorm_norm.comp`), and residual accumulation (`residual_add.comp`).
+- **Permanent Model VRAM Residency Architecture**:
+  - Pre-allocates unified GPU storage buffers for all 30 transformer layers (498 MB) and LM Head (626 MB) at initialization.
+  - Reduces host-to-device weight bus traffic to 0 Byte during token evaluation.
+- **Full-Pipeline On-Chain Execution (`DispatchFullTokenChain`)**:
+  - Chains all 30 transformer layers into a single `VkCommandBuffer` submission and a single fence wait per token.
+  - Cuts GPU driver submission overhead by 99.4% (168 submissions down to 1 submission per token).
+- **FP16 LM Head GPU Compute Shader Offload (`bitnet_gemv_f16.comp`)**:
+  - Offloads $128,256 \times 2,560$ (626.2 MB) FP16 output projection to GPU with native `unpackHalf2x16` and 4-wide SIMD dot products.
+  - 32-lane workgroup shared memory tree reduction with Cosine Similarity 1.000000 against CPU reference.
+- **Vectorized ARM NEON F16 Multi-Threaded GEMV (`llama_bitnet_core.cpp`)**:
+  - 8-way ARM NEON SIMD (`vld1q_f16`, `vcvt_f32_f16`, `vmlaq_f32`) with parallel chunking for CPU fallback paths.
+
+### Performance
+- **Samsung Galaxy S25 (Snapdragon 8 Elite / Adreno 830)**:
+  - Token speed: **17.56 tokens/sec** (up from 1.39 t/s native CPU baseline, **12.6x speedup**).
+  - Prompt eval: **205.9 ms** (down from 2,041 ms).
+- **Samsung Galaxy A35 (Exynos 1380 / Mali-G68)**:
+  - Token speed: **3.47 tokens/sec** (up from 0.58 t/s native CPU baseline, **6.0x speedup**).
+  - Prompt eval: **1,552.8 ms** (down from 8,775 ms).
+  - LM Head latency: 128.8 ms -> 48.9 ms (2.63x faster, saving 80 ms per token).
+
+---
+
+## [1.2.0] - 2026-09-07
+
+### Added
+- Direct integration with `BitNetAdapter` from `ameva_runtime.adapters` SSOT.
+- Strict hardware acceleration verification and Fail-Fast on missing NEON/dotprod instruction set.
+- English localization for diagnostics and CLI messages.
+
+---
+
+## [1.1.5] - 2026-09-05
+
+### Changed
+- Synchronized ameva-runtime unified acceleration bridge and updated installation toolchain.
+- Refined platform detection comments and hardware profile SSOT integration.
+
+---
+
+## [1.1.4] - 2026-09-05
+
+### Changed
+- Migrated hardware acceleration dependency to unified `ameva-runtime>=2.0.0` and `@ameva/runtime>=2.0.0`.
+- Enforced strict Fail-Fast compilation in CMake build extension (RuntimeError on missing toolchain or build failure).
+- Eradicated silent fallback and return paths in native C++ bindings.
+
+---
+
+## [1.1.1] - 2026-09-02
+
+### Added
+- **Unicode NFC Subword Tokenizer**: Replaced heuristic byte division with C FFI tokenization and Unicode NFC regex fallback.
+- **Fail-Fast Native Build**: Enforced 
+aise RuntimeError on CMake build errors in setup.py.
+
+### Cleaned
+- Purged 20+ legacy wheel artifacts from repository tree.
+
+### Verification
+- **Unit Tests**: 20 / 20 passed with 100% assertion coverage.

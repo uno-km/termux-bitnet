@@ -1,0 +1,12 @@
+# Termux-BitNet Full Technical Specification (v1.0.6)
+Official Documentation & Deep Architecture Reference for Autonomous AI Agents.
+
+## 1. System Overview
+ARM64 NEON DotProd SIMD Accelerated 1.58-bit On-Device LLM Inference Engine
+Executes 1.58-bit ternary quantized weights {-1, 0, +1} directly via hand-vectorized ARM64 NEON assembly kernels, reducing matrix multiplications to integer additions and subtractions with under 350MB RAM footprint.
+
+## 2. Package & Installation
+- PyPI: termux-bitnet
+- Command: pip install termux-bitnet
+# or: npm install -g termux-bitnet
+- Repository: https://github.com/uno-km/termux-bitnet

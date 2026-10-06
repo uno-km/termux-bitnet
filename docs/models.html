@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="google-site-verification" content="8apYsaI16kntMWmzYsTLft3HQ4vuIga0D33a7dYQsv0">
+  <script>if(location.pathname.match(/\/(lib|sdk)\/[^\/]+$/)){location.replace(location.pathname+'/'+location.search+location.hash);}</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Model Hub & Registry | Termux-BitNet</title>
+  <meta name="description" content="Verified 1.58-bit GGUF model registry for Termux-BitNet on Android Termux ARM64.">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="/shared/style.css">
+  <script src="i18n-translations.js" defer></script>
+  <script src="i18n.js" defer></script>
+  <script src="/shared/common.js" defer></script>
+  <script src="/shared/telemetry.js" defer></script>
+</head>
+<body>
+  <header>
+    <a href="index.html" class="header-brand">
+      <img src="favicon.svg" alt="Termux-BitNet Logo">
+      <h1 data-i18n="common.brand">Termux-BitNet</h1>
+    </a>
+    <div class="header-controls">
+      <span class="release-tag" data-i18n="common.releaseTag">v1.0.0 (NEON Accelerated)</span>
+      <div class="lang-selector-wrapper">
+        <select class="lang-select" onchange="if(window.i18nManager) window.i18nManager.setLanguage(this.value); else if(window.I18n) window.I18n.setLanguage(this.value)">
+          <option value="en">🇺🇸 English</option>
+          <option value="ko">🇰🇷 한국어</option>
+          <option value="ja">🇯🇵 日本語</option>
+          <option value="zh">🇨🇳 简体中文</option>
+          <option value="es">🇪🇸 Español</option>
+          <option value="de">🇩🇪 Deutsch</option>
+        </select>
+      </div>
+      <div class="pkg-dropdown">
+        <button class="header-btn" type="button" aria-haspopup="true">
+          <span>📦 Packages</span>
+          <span style="font-size: 0.65rem; margin-left: 2px;">▾</span>
+        </button>
+        <div class="pkg-dropdown-menu">
+          <a href="https://pypi.org/project/termux-bitnet/" target="_blank" class="pkg-dropdown-item">
+            <span>🐍</span>
+            <span>PyPI (Python)</span>
+          </a>
+          <a href="https://www.npmjs.com/package/termux-bitnet" target="_blank" class="pkg-dropdown-item npm">
+            <span style="color:#cb3837;">🔴</span>
+            <span>npm (Node.js)</span>
+          </a>
+        </div>
+      </div>
+      <a href="https://github.com/sponsors/uno-km" target="_blank" class="header-btn" style="border-color: #ea4aaa; color: #ea4aaa; font-weight: 700;">💖 Sponsor</a>
+      <a href="https://github.com/uno-km/termux-bitnet" target="_blank" class="header-btn primary" data-i18n="common.githubBtn">GitHub</a>
+    </div>
+  </header>
+
+  <div class="container">
+  <nav class="sidebar">
+    <h3 data-i18n="common.nav.overview">Overview</h3>
+    <ul>
+      <li><a href="index.html" data-i18n="common.nav.home">Home / Architecture</a></li>
+      <li><a href="installation.html" data-i18n="common.nav.installation">Installation Guide</a></li>
+      <li><a href="quickstart.html" data-i18n="common.nav.quickstart">Quickstart & Recipes</a></li>
+    </ul>
+    <h3 data-i18n="common.nav.reference">Official Reference</h3>
+    <ul>
+      <li><a href="models.html" class="active" data-i18n="common.nav.models">Model Hub & Registry</a></li>
+      <li><a href="api-reference.html" data-i18n="common.nav.apiReference">API Reference & C ABI</a></li>
+      <li><a href="advanced-parameters.html" data-i18n="common.nav.advancedParams">Advanced Parameters & INT2</a></li>
+      <li><a href="benchmarks.html" data-i18n="common.nav.benchmarks">Ollama Comparison & Benchmarks</a></li>
+      <li><a href="versions.html" data-i18n="common.nav.versions">Version Archive</a></li>
+    </ul>
+    <h3 data-i18n="common.nav.ecosystem">AMEVA Ecosystem</h3>
+    <ul>
+      <li><a href="/sdk/sentinel/">AMEVA Sentinel (Security SDK)</a></li>
+      <li><a href="/lib/forge/">AMEVA-Forge (WebGPU Autograd)</a></li>
+      <li><a href="/lib/playwright/">Termux-Playwright (Automation)</a></li>
+      <li><a href="/lib/bitnet/">Termux-BitNet (1.58-bit LLM)</a></li>
+                <li><a href="/lib/stt/">Termux-STT (Voice STT)</a></li>
+      <li><a href="/lib/diffusion/">Termux-Diffusion (Image AI)</a></li>
+      <li><a href="/lib/train/">Termux-Train (LoRA Engine)</a></li>
+      <li><a href="/lib/bitnet/" class="active">Termux-BitNet (1.58-bit LLM)</a></li>
+      <li><a href="/app/workstation/">AMEVA Workstation (Web App)</a></li>
+      <li><a href="/foundation/">AMEVA Foundation</a></li>
+      <li><a href="/index.html">Founder Digital CV</a></li>
+    </ul>
+    <h3 data-i18n="common.nav.aiSpecs">AI Agent Protocols</h3>
+    <ul>
+      <li><a href="llms.txt" target="_blank">llms.txt (AI Fast Context)</a></li>
+      <li><a href="llms-full.txt" target="_blank">llms-full.txt (Full Spec)</a></li>
+      <li><a href="robots.txt" target="_blank">robots.txt (AI Crawlers)</a></li>
+      <li><a href="sitemap.xml" target="_blank">sitemap.xml (Sitemap)</a></li>
+    </ul>
+  </nav>
+
+    <main class="content">
+      <h2>Model Hub &amp; Pre-Quantized GGUF Registry</h2>
+      <p class="subtitle">Verified 1.58-bit GGUF models optimized for Android Termux on-device inference.</p>
+
+      <h3>Verified Pre-Quantized Model Catalog</h3>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Model Alias</th>
+            <th>Hugging Face Upstream Repository</th>
+            <th>Parameters &amp; Size</th>
+            <th>Recommended Hardware / Target</th>
+            <th>Download CLI Command</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>bitnet-2b</code></td>
+            <td><code>microsoft/bitnet-b1.58-2B-4T-gguf</code></td>
+            <td>2.4B / <strong>1.13 GB</strong></td>
+            <td>Mid-to-High Range Devices (Galaxy S20+)</td>
+            <td><code>termux-bitnet download bitnet-2b</code></td>
+          </tr>
+          <tr>
+            <td><code>bitnet-large</code></td>
+            <td><code>RichardErkhov/1bitLLM_-_bitnet_b1_58-large-gguf</code></td>
+            <td>0.7B / <strong>404 MB</strong></td>
+            <td>Constrained Memory / Low-End Devices</td>
+            <td><code>termux-bitnet download bitnet-large</code></td>
+          </tr>
+          <tr>
+            <td><code>bitnet-3b</code></td>
+            <td><code>Green-Sky/bitnet_b1_58-3B-GGUF</code></td>
+            <td>3.3B / <strong>730 MB</strong></td>
+            <td>High-Capacity On-Device Tasks</td>
+            <td><code>termux-bitnet download bitnet-3b</code></td>
+          </tr>
+          <tr>
+            <td><code>bitnet-3b-q4</code></td>
+            <td><code>RichardErkhov/1bitLLM_-_bitnet_b1_58-3B-gguf</code></td>
+            <td>3.3B / <strong>1.83 GB</strong></td>
+            <td>High-Precision 4-bit Hybrid</td>
+            <td><code>termux-bitnet download bitnet-3b-q4</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 style="margin-top: 32px;">Model Cache Location &amp; Storage Architecture</h3>
+      <p>Downloaded models are cached locally in <code>~/.cache/termux-bitnet/models/</code>. The built-in downloader validates SHA-256 checksums and automatically resumes interrupted transfers using HTTP Range headers.</p>
+    </main>
+  </div>
+
+  <footer>
+    <div style="margin-bottom: 10px; font-size: 0.88em; color: var(--primary-color);">
+      🏛️ <strong>Engineered by AMEVA Foundation (아메바 오픈소스 재단)</strong> &mdash; Democratizing Sovereign On-Device AI.
+    </div>
+    <div style="margin-bottom: 8px; font-size: 0.82em; opacity: 0.85;">
+      <strong>Disclaimer:</strong> termux-bitnet is an independent open-source project designed for ARM64 and Android Termux environments and is not officially affiliated with Microsoft or Termux project.
+    </div>
+    <span data-i18n="common.footerText">&copy; 2026 termux-bitnet Project (uno-km). Released under Apache License 2.0.</span>
+  </footer>
+</body>
+</html>
