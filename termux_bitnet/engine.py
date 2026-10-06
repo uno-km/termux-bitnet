@@ -125,6 +125,14 @@ class BitNetEngine:
     def _load_native_library(self) -> Optional[ctypes.CDLL]:
         """Dynamically load the C ABI shared library."""
         lib_path = self._find_library_path()
+        if not lib_path or not lib_path.exists():
+            try:
+                from termux_bitnet.installer import install_prebuilt_library
+                if install_prebuilt_library():
+                    lib_path = self._find_library_path()
+            except Exception:
+                pass
+
         if lib_path and lib_path.exists():
             try:
                 return ctypes.CDLL(str(lib_path))

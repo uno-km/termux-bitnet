@@ -343,7 +343,9 @@ def main():
 
     # install
     p_inst = subparsers.add_parser("install", help="1-Click installer and prebuilt engine dispatcher")
-    p_inst.set_defaults(func=lambda args: __import__("termux_bitnet.installer", fromlist=["main"]).main())
+    p_inst.add_argument("--force", "-f", action="store_true", help="Force clean re-download and installation")
+    p_inst.add_argument("--dedicate", action="store_true", help="Preserve AMEVA runtime symlinks")
+    p_inst.set_defaults(func=lambda args: sys.exit(0 if __import__("termux_bitnet.installer", fromlist=["install_prebuilt_library"]).install_prebuilt_library(force=getattr(args, "force", False), dedicate=getattr(args, "dedicate", False)) else 1))
 
     # info
     p_info = subparsers.add_parser("info", help="Inspect local CPU SIMD/DotProd capabilities")
