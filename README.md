@@ -22,8 +22,9 @@
 #### 📚 Official Academic & Upstream Credibility
 * **Foundation Technical Whitepaper**: [AOSF-TR-2026-BITNET-TERNARY-02: Root Cause Analysis of Ternary Numerical Collapse and Dynamic Activation Engine](https://uno-km.vercel.app/labs/?menu=research-papers)
 * **Upstream Contributions to Microsoft**:
-  * [microsoft/BitNet #551](https://github.com/microsoft/BitNet/pull/551): Resolved ARM QK=128 stride memory layout desynchronization and word salad.
+  * [microsoft/BitNet #633](https://github.com/microsoft/BitNet/pull/633): Fixed ARM64 I2_S ternary dequantization positive bias drift (`(w & 3) - 1` centering) and added scalar fallback, permanently resolving Word Salad collapse (#468, #470, #547, #588, #600, #602, #616).
   * [microsoft/BitNet #624](https://github.com/microsoft/BitNet/pull/624): Completed 1x4_32W parallel NEON `sdot` hardware acceleration kernel and automated Android Termux tooling.
+  * [microsoft/BitNet #551](https://github.com/microsoft/BitNet/pull/551): Resolved ARM QK=128 stride memory layout desynchronization and word salad.
 * **Upstream Contributions to GGML**:
   * [ggml-org/whisper.cpp #4089](https://github.com/ggml-org/whisper.cpp/pull/4089): Mobile heterogeneous GPU-Encoder / CPU-Decoder split-mode architecture.
 
@@ -78,25 +79,41 @@ All benchmarks were empirically measured on genuine Samsung Galaxy hardware unde
 
 ---
 
-## 📦 Installation
+## 📦 Installation & Zero-Compilation Prebuilts
 
-### 1. Python SDK (PyPI)
-```bash
-# Inside Android Termux (prerequisites: clang cmake python openblas)
-pkg update && pkg install -y clang cmake python openblas
+> **Zero-Compilation Native Acceleration**: You do **NOT** need to compile or build from source on your phone. Verified pre-compiled native binaries (`libtermux_bitnet.so` & standalone `termux-bitnet-cli`) are published directly under [GitHub Releases (v2.0.1)](https://github.com/uno-km/termux-bitnet/releases/tag/v2.0.1).
 
-# Install Termux-BitNet and AMEVA-Runtime
-pip install --upgrade termux-bitnet ameva-runtime
-```
-
-### 2. Node.js CLI (npm)
-```bash
-npm install -g termux-bitnet @ameva/runtime
-```
-
-### 3. One-Touch Native Installer
+### 1. One-Touch Automated Installer (Recommended)
+Automatically provisions the verified ARM64 native engine (`libtermux_bitnet.so`) and CLI directly into `$PREFIX`:
 ```bash
 curl -sSL https://raw.githubusercontent.com/uno-km/termux-bitnet/main/install.sh | bash
+```
+
+### 2. Direct Prebuilt Extraction from GitHub Releases
+To run immediately without any installer script, download and extract the verified prebuilt bundle:
+```bash
+# 1. Download official v2.0.1 prebuilt bundle from GitHub Releases
+curl -sSL -O https://github.com/uno-km/termux-bitnet/releases/download/v2.0.1/termux-bitnet-v2.0.1-android-aarch64.tar.gz
+
+# 2. Extract and place directly into Termux system paths
+tar -xzf termux-bitnet-v2.0.1-android-aarch64.tar.gz
+chmod +x libtermux_bitnet.so termux-bitnet-cli
+mv libtermux_bitnet.so $PREFIX/lib/
+mv termux-bitnet-cli $PREFIX/bin/
+
+# 3. Test immediate native execution (< 0.01s)
+termux-bitnet-cli --help
+```
+
+### 3. Python SDK (PyPI)
+```bash
+pip install --upgrade termux-bitnet
+```
+*(The Python SDK automatically detects and loads the verified `libtermux_bitnet.so` in `$PREFIX/lib`)*
+
+### 4. Node.js CLI (npm)
+```bash
+npm install -g termux-bitnet
 ```
 
 ---
